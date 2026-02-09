@@ -207,15 +207,15 @@ importers:
       '@biomejs/wasm-nodejs':
         specifier: ^1.9.4
         version: 1.9.4
+      '@goke/mcp':
+        specifier: ^0.0.4
+        version: 0.0.4(goke@6.1.1)(hono@4.11.5)(zod@4.1.11)
       '@inquirer/prompts':
         specifier: ^8.2.0
         version: 8.2.0(@types/node@22.15.21)
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.3
         version: 1.25.3(hono@4.11.5)(zod@4.1.11)
-      '@xmorse/cac':
-        specifier: ^6.0.7
-        version: 6.0.7
       async-sema:
         specifier: ^3.1.1
         version: 3.1.1
@@ -225,9 +225,9 @@ importers:
       esbuild-plugins-node-modules-polyfill:
         specifier: ^1.6.8
         version: 1.6.8(esbuild@0.25.8)
-      mcpcac:
-        specifier: ^0.0.2
-        version: 0.0.2(@xmorse/cac@6.0.7)(hono@4.11.5)(zod@4.1.11)
+      goke:
+        specifier: ^6.1.1
+        version: 6.1.1
       nanospinner:
         specifier: ^1.2.2
         version: 1.2.2
@@ -1628,6 +1628,11 @@ packages:
     resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
     engines: {node: '>=14'}
 
+  '@goke/mcp@0.0.4':
+    resolution: {integrity: sha512-z75+Cfso+NFcYlF/9CR43z1F6k+j9v5otHr886OVzlaRid1+16NCJ0RA+NuaN5Bl0xA6GP9rZiHT8o8Q/7FEOw==}
+    peerDependencies:
+      goke: '*'
+
   '@hono/node-server@1.19.9':
     resolution: {integrity: sha512-vHL6w3ecZsky+8P5MD+eFfaGTyCeOHUIFYMGpQGbrBTSmNNoxv0if69rEZ5giu36weC5saFuznL411gRX7bJDw==}
     engines: {node: '>=18.14.1'}
@@ -2792,10 +2797,6 @@ packages:
   '@webassemblyjs/wast-printer@1.14.1':
     resolution: {integrity: sha512-kPSSXE6De1XOR820C90RIo2ogvZG+c3KiHzqUoO/F34Y2shGzesfqv7o57xrxovZJH/MetF5UjroJ/R/3isoiw==}
 
-  '@xmorse/cac@6.0.7':
-    resolution: {integrity: sha512-eCKgJIn0Yswt4JreHNXUslyuOe8amDK6gE+wVgG8/Tu1HmCxuxAUOGPQRoma4mFO77759/YYE5opAbmaU6+Gxg==}
-    engines: {node: '>=8'}
-
   '@xmorse/deployment-utils@0.7.4':
     resolution: {integrity: sha512-L8/n9WmTpWEE2SpzN0RugceT4cPzxblpULv1crDrLJ1kilKAxsjFPeD4mI7CKjI7fV60iR68bhKi3RE9HE4vqg==}
 
@@ -3945,11 +3946,12 @@ packages:
 
   glob@10.4.5:
     resolution: {integrity: sha512-7Bv8RF0k6xjo7d4A/PxYLbUCfb6c+Vpd2/mB2yRDlew7Jb5hEXiCD9ibfO7wpk8i4sevK6DFny9h7EYbM3/sHg==}
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
     hasBin: true
 
   glob@7.1.6:
     resolution: {integrity: sha512-LwaxwyZ72Lk7vZINtNNrywX0ZuLyStrdDtabefZKAY5ZGJhVtgdznluResxNmPitE0SAO+O26sWTHeKSI2wMBA==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   globby@11.1.0:
     resolution: {integrity: sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==}
@@ -3957,6 +3959,10 @@ packages:
 
   globrex@0.1.2:
     resolution: {integrity: sha512-uHJgbwAMwNFf5mLst7IWLNg14x1CkeqglJb/K3doi4dw6q2IvAAmM/Y81kevy83wP+Sst+nutFTYOGg3d1lsxg==}
+
+  goke@6.1.1:
+    resolution: {integrity: sha512-rS02JY5pnqmGCQTgUb5sKMEMZilMvy4NS1j7GzPNGSLzUejFsTmEzv/fwiaYsoXKSWetfbbbcEmtuU1rXTZr9w==}
+    engines: {node: '>=18'}
 
   gopd@1.2.0:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
@@ -4234,6 +4240,10 @@ packages:
     resolution: {integrity: sha512-wpxZs9NoxZaJESJGIZTyDEaYpl0FKSA+FB9aJiyemKhMwkxQg63h4T1KJgUGHpTqPDNRcmmYLugrRjJlBtWvRA==}
     hasBin: true
 
+  js-yaml@4.1.1:
+    resolution: {integrity: sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA==}
+    hasBin: true
+
   jsesc@3.0.2:
     resolution: {integrity: sha512-xKqzzWXDttJuOcawBt4KnKHHIf5oQ/Cxax+0PWFG+DFDgHNAdi+TXECADI+RYiFUMmx8792xsMbbgXj4CwnP4g==}
     engines: {node: '>=6'}
@@ -4354,11 +4364,6 @@ packages:
 
   matter-js@0.20.0:
     resolution: {integrity: sha512-iC9fYR7zVT3HppNnsFsp9XOoQdQN2tUyfaKg4CHLH8bN+j6GT4Gw7IH2rP0tflAebrHFw730RR3DkVSZRX8hwA==}
-
-  mcpcac@0.0.2:
-    resolution: {integrity: sha512-hGufailsvLmLOcMfdjXeql7nTa3pGV4GUZ+0woQz6RCr8gKpl2RFpjQzFhOjWIYs+WbGUCkq98ObUN9F6B7u+g==}
-    peerDependencies:
-      '@xmorse/cac': '*'
 
   mdast-util-definitions@6.0.0:
     resolution: {integrity: sha512-scTllyX6pnYNZH/AIp/0ePz6s4cZtARxImwoPJ7kS42n+MnVsI4XbnG6d4ibehRIldYMWM2LD7ImQblVhUejVQ==}
@@ -7549,6 +7554,17 @@ snapshots:
 
   '@fastify/busboy@2.1.1': {}
 
+  '@goke/mcp@0.0.4(goke@6.1.1)(hono@4.11.5)(zod@4.1.11)':
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.25.3(hono@4.11.5)(zod@4.1.11)
+      goke: 6.1.1
+      js-yaml: 4.1.1
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - hono
+      - supports-color
+      - zod
+
   '@hono/node-server@1.19.9(hono@4.11.5)':
     dependencies:
       hono: 4.11.5
@@ -8634,8 +8650,6 @@ snapshots:
     dependencies:
       '@webassemblyjs/ast': 1.14.1
       '@xtuc/long': 4.2.2
-
-  '@xmorse/cac@6.0.7': {}
 
   '@xmorse/deployment-utils@0.7.4(@types/node@22.15.21)(jiti@1.21.7)(terser@5.46.0)(tsx@4.20.3)(yaml@2.5.1)':
     dependencies:
@@ -10034,6 +10048,10 @@ snapshots:
 
   globrex@0.1.2: {}
 
+  goke@6.1.1:
+    dependencies:
+      picocolors: 1.1.1
+
   gopd@1.2.0: {}
 
   graceful-fs@4.2.11: {}
@@ -10347,6 +10365,10 @@ snapshots:
     dependencies:
       argparse: 2.0.1
 
+  js-yaml@4.1.1:
+    dependencies:
+      argparse: 2.0.1
+
   jsesc@3.0.2: {}
 
   jsesc@3.1.0: {}
@@ -10450,16 +10472,6 @@ snapshots:
   math-intrinsics@1.1.0: {}
 
   matter-js@0.20.0: {}
-
-  mcpcac@0.0.2(@xmorse/cac@6.0.7)(hono@4.11.5)(zod@4.1.11):
-    dependencies:
-      '@modelcontextprotocol/sdk': 1.25.3(hono@4.11.5)(zod@4.1.11)
-      '@xmorse/cac': 6.0.7
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - hono
-      - supports-color
-      - zod
 
   mdast-util-definitions@6.0.0:
     dependencies:

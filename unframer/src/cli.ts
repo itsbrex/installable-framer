@@ -10,7 +10,7 @@ import { bundle, StyleToken, createExampleComponentCode } from './exporter.js'
 import { createClient } from './generated/api-client.js'
 import { generateStackblitzFiles } from './stackblitz.js'
 
-import { cac } from '@xmorse/cac'
+import { goke } from 'goke'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 
@@ -29,35 +29,27 @@ import { getPackageManager } from './package-manager.js'
 import { notifyError } from './sentry.js'
 import { dispatcher } from './undici-dispatcher.js'
 import { loadConfig, saveConfig, getConfigPath } from './lib/config.js'
-import { addMcpCommands } from 'mcpcac'
+import { addMcpCommands } from '@goke/mcp'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 const configNames = ['unframer.config.json', 'unframer.json']
 
-export const cli = cac('unframer')
+export const cli = goke('unframer')
 
 let defaultOutDir = 'framer'
 
 cli.command('[projectId]', 'Run unframer with optional project ID')
-    .option('--outDir <dir>', 'Output directory', { default: defaultOutDir })
-    .option(
-        '--external [package]',
-        'Make some package external, do not pass a package name to make all packages external',
-        {
-            default: true,
-        },
-    )
-    .option('--watch', 'Watch for changes and rebuild', { default: false })
-    .option('--jsx', 'Output jsx code instead of minified .js code', {
-        default: true,
-    })
-    .option('--debug', 'Enable debug logging', { default: false })
-    .option('--metafile', 'Generate meta.json file with build metadata', {
-        default: false,
-    })
+    .option('--outDir <dir>', 'Output directory')
+    .option('--external [package]', 'Make some package external, do not pass a package name to make all packages external')
+    .option('--watch', 'Watch for changes and rebuild')
+    .option('--jsx', 'Output jsx code instead of minified .js code')
+    .option('--debug', 'Enable debug logging')
+    .option('--metafile', 'Generate meta.json file with build metadata')
   .action(async function main(projectId, options) {
-        const external_ = options.external
+        const outDir = options.outDir || defaultOutDir
+        const jsx = options.jsx ?? true
+        const external_ = options.external ?? true
         const allExternal = external_ === true
         const externalPackages: string[] = Array.isArray(external_)
             ? external_.filter((x) => x.trim())
@@ -68,7 +60,6 @@ cli.command('[projectId]', 'Run unframer with optional project ID')
             if (options.debug) {
                 logger.debug = true
             }
-            const outDir = options.outDir
             const controller = new AbortController()
             const signal = controller.signal
             const watch = options.watch
@@ -79,7 +70,6 @@ cli.command('[projectId]', 'Run unframer with optional project ID')
                     outDir,
                     projectId,
                 })
-                let jsx = options.jsx
                 const { rebuild, buildContext } = await bundle({
                     config: {
                         jsx,
@@ -191,9 +181,7 @@ cli.command(
     'example-app <projectId>',
     'Create an example app with Framer components',
 )
-    .option('--outDir <dir>', 'Output directory', {
-        default: 'example-unframer-app',
-    })
+    .option('--outDir <dir>', 'Output directory')
     .action(async (projectId, options) => {
         if (!projectId?.trim()) {
             console.log(
@@ -202,7 +190,7 @@ cli.command(
             process.exit(1)
         }
         try {
-            const outDir = options.outDir
+            const outDir = options.outDir || 'example-unframer-app'
             console.log(`Creating example app in ${outDir}`)
 
             // Create the output directory
@@ -322,9 +310,8 @@ cli.command(
 
 cli.command(
     'mcp login [url]',
-    'Login by pasting your Framer MCP URL. Get the URL from Framer MCP plugin (Cmd/Ctrl+K > "MCP"). After login, run "unframer mcp skill" to see all available commands then. This cli will let you control Framer MCP via cli commands like `unframer mcp getProjectXml`',
+    'Login by pasting your Framer MCP URL. Get the URL from Framer MCP plugin (Cmd/Ctrl+K > "MCP"). After login, run "unframer --help" to see all available commands.',
 ).action(async (url?: string) => {
-    // Prompt for URL if not provided, avoids shell escaping issues with & in URLs
     if (!url) {
         const shortcut = process.platform === 'darwin' ? 'Cmd+K' : 'Ctrl+K'
         console.log('\nTo get your MCP URL:')
@@ -337,7 +324,6 @@ cli.command(
         try {
             mcpUrl = await input({ message: 'Paste MCP URL:' })
         } catch (error) {
-            // Handle Ctrl+C gracefully
             if (error instanceof Error && error.name === 'ExitPromptError') {
                 process.exit(0)
             }
@@ -350,30 +336,7 @@ cli.command(
     }
     saveConfig({ mcpUrl })
     console.log(`MCP URL saved to ${getConfigPath()}`)
-    console.log(`Now you must run \`unframer mcp skill\` to see how to unframer CLI. Every Framer MCP command is exposed as a cli command`)
-
-})
-
-cli.command(
-    'mcp skill',
-    'Show detailed help for all MCP commands with their options.',
-).action(() => {
-    const config = loadConfig()
-    if (!config.mcpUrl) {
-        console.log('No MCP URL configured. Run "unframer mcp login" first to connect to a Framer project.')
-        return
-    }
-    const mcpCommands = cli.commands.filter(
-        (cmd) => cmd.name.startsWith('mcp ') && cmd.name !== 'mcp login' && cmd.name !== 'mcp skill',
-    )
-    if (mcpCommands.length === 0) {
-        console.log('No MCP commands available. Run "unframer mcp login" first and paste there the Framer MCP url.')
-        return
-    }
-    for (const cmd of mcpCommands) {
-        cmd.outputHelp()
-        console.log('')
-    }
+    console.log(`Run \`unframer --help\` to see all available MCP commands`)
 })
 
 // Add MCP tool commands - only registered if transport is available

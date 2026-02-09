@@ -466,9 +466,9 @@ gitchamber allows you to list, search and read files in a repo. you MUST use it 
 - it can search a repo for a specific substring
 - it can show the code with line numbers for each line, letting you find a specific line number
 
-# cac for cli development
+# goke for cli development
 
-the cli uses cac npm package.
+the cli uses goke npm package (a cac fork with space-separated subcommands and standard schema support). MCP commands are added via @goke/mcp.
 
 # spiceflow
 

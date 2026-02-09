@@ -1,19 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import type { CachedMcpTools } from '@goke/mcp'
 
 const CONFIG_DIR = path.join(os.homedir(), '.unframer')
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json')
-
-export interface CachedMcpTools {
-    tools: Array<{
-        name: string
-        description?: string
-        inputSchema?: unknown
-    }>
-    timestamp: number
-    sessionId?: string
-}
 
 export interface UnframerConfig {
     mcpUrl?: string
