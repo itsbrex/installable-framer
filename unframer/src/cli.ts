@@ -344,11 +344,12 @@ await addMcpCommands({
     cli,
     commandPrefix: 'mcp',
     getMcpTransport: (sessionId?: string) => {
-        const config = loadConfig()
-        if (!config.mcpUrl) {
+        // UNFRAMER_MCP_URL env var overrides config file (contains full URL with auth)
+        const mcpUrl = process.env.UNFRAMER_MCP_URL || loadConfig().mcpUrl
+        if (!mcpUrl) {
             return null
         }
-        const url = new URL(config.mcpUrl)
+        const url = new URL(mcpUrl)
         // Use /mcp endpoint for StreamableHTTP
         if (url.pathname.endsWith('/sse')) {
             url.pathname = url.pathname.replace(/\/sse$/, '/mcp')
