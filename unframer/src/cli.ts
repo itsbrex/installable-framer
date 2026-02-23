@@ -416,7 +416,15 @@ cli.command(
 
 // Add MCP tool commands
 const config = loadConfig()
-const mcpMode = config.mode || (config.mcpUrl ? 'plugin' : undefined)
+const cliArgs = process.argv.slice(2)
+const hasMcpCommand = cliArgs.includes('mcp')
+const hasProjectOption = cliArgs.some((arg) => {
+    return arg === '--project' || arg.startsWith('--project=')
+})
+const shouldUseServerApiForProjectOption = hasMcpCommand && hasProjectOption
+const mcpMode = shouldUseServerApiForProjectOption
+    ? 'server-api'
+    : config.mode || (config.mcpUrl ? 'plugin' : undefined)
 
 if (mcpMode === 'server-api') {
     // Server API mode - use framer-api directly
