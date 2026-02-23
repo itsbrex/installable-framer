@@ -1,16 +1,17 @@
+import { z } from 'zod'
 import { setMaxListeners } from 'events'
 import pkg from '../package.json' with { type: 'json' }
 import pico from 'picocolors'
 const { blue, bgBlue, green } = pico
 import { fetch } from 'undici'
 import './sentry.js'
-import { input } from '@inquirer/prompts'
+import { input, select, password } from '@inquirer/prompts'
 
 import { bundle, StyleToken, createExampleComponentCode } from './exporter.js'
 import { createClient } from './generated/api-client.js'
 import { generateStackblitzFiles } from './stackblitz.js'
 
-import { goke } from 'goke'
+import { goke, wrapJsonSchema } from 'goke'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 
@@ -28,10 +29,13 @@ import {
 import { getPackageManager } from './package-manager.js'
 import { notifyError } from './sentry.js'
 import { dispatcher } from './undici-dispatcher.js'
-import { loadConfig, saveConfig, getConfigPath } from './lib/config.js'
+import {
+    loadConfig,
+    saveConfig,
+    getConfigPath,
+    type McpMode,
+} from './config.js'
 import { addMcpCommands } from '@goke/mcp'
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 const configNames = ['unframer.config.json', 'unframer.json']
 
@@ -41,12 +45,15 @@ let defaultOutDir = 'framer'
 
 cli.command('[projectId]', 'Run unframer with optional project ID')
     .option('--outDir <dir>', 'Output directory')
-    .option('--external [package]', 'Make some package external, do not pass a package name to make all packages external')
+    .option(
+        '--external [package]',
+        'Make some package external, do not pass a package name to make all packages external',
+    )
     .option('--watch', 'Watch for changes and rebuild')
     .option('--jsx', 'Output jsx code instead of minified .js code')
     .option('--debug', 'Enable debug logging')
     .option('--metafile', 'Generate meta.json file with build metadata')
-  .action(async function main(projectId, options) {
+    .action(async function main(projectId, options) {
         const outDir = options.outDir || defaultOutDir
         const jsx = options.jsx ?? true
         const external_ = options.external ?? true
@@ -173,7 +180,6 @@ function fixOldUnframerPath() {
 }
 
 const version = pkg.version
-
 
 cli.version(version).help()
 
@@ -307,64 +313,302 @@ cli.command(
         }
     })
 
-
 cli.command(
     'mcp login [url]',
-    'Login by pasting your Framer MCP URL. Get the URL from Framer MCP plugin (Cmd/Ctrl+K > "MCP"). After login, run "unframer --help" to see all available commands.',
+    'Login to Framer MCP. Choose between plugin mode (requires Framer open) or server API mode (works headlessly with API key).',
 ).action(async (url?: string) => {
-    if (!url) {
-        const shortcut = process.platform === 'darwin' ? 'Cmd+K' : 'Ctrl+K'
-        console.log('\nTo get your MCP URL:')
-        console.log('  1. Go to https://framer.com and open your project')
-        console.log(`  2. Press ${shortcut} and search for "MCP" plugin`)
-        console.log('  3. Copy the URL shown in the plugin\n')
-    }
-    let mcpUrl = url
-    if (!mcpUrl) {
-        try {
-            mcpUrl = await input({ message: 'Paste MCP URL:' })
-        } catch (error) {
-            if (error instanceof Error && error.name === 'ExitPromptError') {
-                process.exit(0)
-            }
-            throw error
+    try {
+        // If URL is passed directly, use plugin mode
+        if (url) {
+            saveConfig({ mode: 'plugin', mcpUrl: url })
+            console.log(`MCP URL saved to ${getConfigPath()}`)
+            console.log(
+                `Run \`unframer --help\` to see all available MCP commands`,
+            )
+            return
         }
+
+        // Show mode selection dropdown
+        const mode = await select<McpMode>({
+            message: 'Select authentication mode:',
+            choices: [
+                {
+                    value: 'plugin' as McpMode,
+                    name: 'MCP Plugin (Recommended)',
+                    description:
+                        'Requires Framer to be open with MCP plugin running. Paste URL from plugin.',
+                },
+                {
+                    value: 'server-api' as McpMode,
+                    name: 'Server API',
+                    description:
+                        'Works without Framer open. Requires API key from project settings.',
+                },
+            ],
+        })
+
+        if (mode === 'plugin') {
+            const shortcut = process.platform === 'darwin' ? 'Cmd+K' : 'Ctrl+K'
+            console.log('\nTo get your MCP URL:')
+            console.log('  1. Go to https://framer.com and open your project')
+            console.log(`  2. Press ${shortcut} and search for "MCP" plugin`)
+            console.log('  3. Copy the URL shown in the plugin\n')
+
+            const mcpUrl = await input({ message: 'Paste MCP URL:' })
+            if (!mcpUrl) {
+                console.error('MCP URL is required')
+                process.exit(1)
+            }
+            saveConfig({ mode: 'plugin', mcpUrl })
+            console.log(`\nMCP URL saved to ${getConfigPath()}`)
+            console.log(
+                `Run \`unframer --help\` to see all available MCP commands`,
+            )
+        } else {
+            // Server API mode
+            console.log('\nTo get your API key:')
+            console.log('  1. Open your Framer project')
+            console.log('  2. Go to Project Settings > API')
+            console.log('  3. Generate or copy your API key\n')
+
+            const apiKey = await password({ message: 'Enter Framer API key:' })
+            if (!apiKey) {
+                console.error('API key is required')
+                process.exit(1)
+            }
+
+            console.log('\nTo get your project URL:')
+            console.log(
+                '  Copy the URL from your browser when viewing the project',
+            )
+            console.log(
+                '  Example: https://framer.com/projects/MyProject--abc123\n',
+            )
+
+            const projectUrl = await input({
+                message:
+                    'Enter Framer project URL (optional, can use --project later):',
+            })
+
+            saveConfig({
+                mode: 'server-api',
+                framerApiKey: apiKey,
+                framerProjectUrl: projectUrl || undefined,
+            })
+            console.log(`\nServer API credentials saved to ${getConfigPath()}`)
+            console.log(`\nUsage:`)
+            if (projectUrl) {
+                console.log(`  unframer mcp getProjectXml`)
+            } else {
+                console.log(
+                    `  unframer mcp getProjectXml --project "https://framer.com/projects/..."`,
+                )
+            }
+            console.log(`\nOr set FRAMER_PROJECT_URL environment variable`)
+        }
+    } catch (error) {
+        if (error instanceof Error && error.name === 'ExitPromptError') {
+            process.exit(0)
+        }
+        throw error
     }
-    if (!mcpUrl) {
-        console.error('MCP URL is required')
-        process.exit(1)
-    }
-    saveConfig({ mcpUrl })
-    console.log(`MCP URL saved to ${getConfigPath()}`)
-    console.log(`Run \`unframer --help\` to see all available MCP commands`)
 })
 
-// Add MCP tool commands - only registered if transport is available
-await addMcpCommands({
-    cli,
-    commandPrefix: 'mcp',
-    getMcpTransport: (sessionId?: string) => {
-        // UNFRAMER_MCP_URL env var overrides config file (contains full URL with auth)
-        const mcpUrl = process.env.UNFRAMER_MCP_URL || loadConfig().mcpUrl
-        if (!mcpUrl) {
-            return null
-        }
-        const url = new URL(mcpUrl)
-        // Use /mcp endpoint for StreamableHTTP
-        if (url.pathname.endsWith('/sse')) {
-            url.pathname = url.pathname.replace(/\/sse$/, '/mcp')
-        }
-        return new StreamableHTTPClientTransport(url, { sessionId })
-    },
-    loadCache: () => {
-        return loadConfig().cachedMcpTools
-    },
-    saveCache: (cache) => {
-        const config = loadConfig()
-        saveConfig({ ...config, cachedMcpTools: cache })
-    },
-}).catch(e => console.error(e))
+// Add MCP tool commands
+const config = loadConfig()
+const mcpMode = config.mode || (config.mcpUrl ? 'plugin' : undefined)
 
+if (mcpMode === 'server-api') {
+    // Server API mode - use framer-api directly
+    // Commands are registered via registerServerApiCommands below
+    await registerServerApiCommands()
+} else {
+    // Plugin mode - use MCP transport
+    await addMcpCommands({
+        cli,
+        commandPrefix: 'mcp',
+        getMcpTransport: async (sessionId?: string) => {
+            const { StreamableHTTPClientTransport } = await import(
+                '@modelcontextprotocol/sdk/client/streamableHttp.js'
+            )
+            // UNFRAMER_MCP_URL env var overrides config file (contains full URL with auth)
+            const mcpUrl = process.env.UNFRAMER_MCP_URL || loadConfig().mcpUrl
+            if (!mcpUrl) {
+                return null
+            }
+            const url = new URL(mcpUrl)
+            // Use /mcp endpoint for StreamableHTTP
+            if (url.pathname.endsWith('/sse')) {
+                url.pathname = url.pathname.replace(/\/sse$/, '/mcp')
+            }
+            return new StreamableHTTPClientTransport(url, { sessionId })
+        },
+        loadCache: () => {
+            return loadConfig().cachedMcpTools
+        },
+        saveCache: (cache) => {
+            const configNow = loadConfig()
+            saveConfig({ ...configNow, cachedMcpTools: cache })
+        },
+    }).catch((e) => console.error(e))
+}
+
+/**
+ * Register MCP commands for server-api mode using framer-api directly.
+ * This bypasses the MCP transport and calls handlers directly.
+ */
+async function registerServerApiCommands() {
+    // Dynamic import to avoid loading framer-api in plugin mode
+    const { connect } = await import('framer-api')
+
+    // Import tool definitions and handler from plugin-mcp
+    // Note: Run `pnpm --filter plugin-mcp build && pnpm --filter plugin-mcp gen-unframer` first
+    const { mcpTools, mcpToolHandler } = await import('./plugin-mcp-dist/lib/mcp-handlers.js')
+    if (!mcpTools || !mcpToolHandler) {
+        return
+    }
+
+    type JsonSchemaProperty = {
+        type?: string | string[]
+        description?: string
+        default?: unknown
+        [key: string]: unknown
+    }
+    type JsonSchemaObject = {
+        properties?: Record<string, JsonSchemaProperty>
+        required?: string[]
+    }
+
+    // Register a command for each MCP tool
+    for (const [toolName, toolDef] of Object.entries(mcpTools) as [
+        keyof typeof mcpTools,
+        (typeof mcpTools)[keyof typeof mcpTools],
+    ][]) {
+        const cmd = cli.command(
+            `mcp ${toolName}`,
+            toolDef.description.split('\n')[0], // First line as short description
+        )
+
+        // Add --project option for all server-api commands
+        cmd.option(
+            '--project <url>',
+            'Framer project URL (or set FRAMER_PROJECT_URL env var) only needed in Server API mode',
+        )
+
+        // Add options based on tool input schema, using zod v4 native JSON Schema conversion
+        const inputSchema = toolDef.input
+        if (inputSchema) {
+            const jsonSchema = z.toJSONSchema(inputSchema) as JsonSchemaObject
+            const properties = jsonSchema.properties || {}
+            const required = new Set(jsonSchema.required || [])
+            for (const [key, prop] of Object.entries(properties)) {
+                const isRequired = required.has(key)
+                const isBooleanType = prop.type === 'boolean'
+                const optionName = isBooleanType
+                    ? `--${key}`
+                    : `--${key} <value>`
+                const optionDescription = [
+                    prop.description || key,
+                    isRequired ? '(required)' : '',
+                ]
+                    .filter(Boolean)
+                    .join(' ')
+                if (isBooleanType && prop.default === undefined) {
+                    cmd.option(optionName, optionDescription)
+                    continue
+                }
+                cmd.option(
+                    optionName,
+                    wrapJsonSchema({
+                        ...prop,
+                        description: optionDescription,
+                    }),
+                )
+            }
+        }
+
+        cmd.action(async (options: Record<string, unknown>) => {
+            const projectOption =
+                typeof options.project === 'string'
+                    ? options.project
+                    : undefined
+            const projectUrl =
+                projectOption ||
+                process.env.FRAMER_PROJECT_URL ||
+                loadConfig().framerProjectUrl
+            const apiKey =
+                process.env.FRAMER_API_KEY || loadConfig().framerApiKey
+
+            if (!projectUrl) {
+                console.error(
+                    'Project URL required. Use --project option, FRAMER_PROJECT_URL env var, or set during login.',
+                )
+                process.exit(1)
+            }
+            if (!apiKey) {
+                console.error(
+                    'API key required. Set FRAMER_API_KEY env var or run `unframer mcp login` first.',
+                )
+                process.exit(1)
+            }
+
+            // Remove CLI-specific options from input
+            const toolInput = Object.fromEntries(
+                Object.entries(options).filter(([key]) => {
+                    return key !== 'project'
+                }),
+            )
+
+            const globalWithFramer = globalThis as typeof globalThis & {
+                framer?: unknown
+            }
+            let framerClient: Awaited<ReturnType<typeof connect>> | undefined =
+                undefined
+            let actionError: unknown = undefined
+
+            try {
+                spinner.start(`Connecting to Framer...`)
+                framerClient = await connect(projectUrl, apiKey)
+
+                // Set global framer for utility functions that use it
+                globalWithFramer.framer = framerClient
+
+                spinner.start(`Running ${toolName}...`)
+                const result = await mcpToolHandler({
+                    type: toolName,
+                    input: toolInput,
+                })
+                spinner.stop('')
+
+                // Output result
+                if (typeof result === 'string') {
+                    console.log(result)
+                } else {
+                    console.log(JSON.stringify(result, null, 2))
+                }
+
+            } catch (error) {
+                actionError = error
+            } finally {
+                if (framerClient) {
+                    try {
+                        await framerClient.disconnect()
+                    } catch (disconnectError) {
+                        logger.error('Failed disconnecting from Framer:', disconnectError)
+                    }
+                }
+                delete globalWithFramer.framer
+            }
+
+            if (actionError) {
+                spinner.error(
+                    `Failed: ${actionError instanceof Error ? actionError.message : String(actionError)}`,
+                )
+                process.exit(1)
+            }
+        })
+    }
+}
 
 export type Config = {
     jsx?: boolean
