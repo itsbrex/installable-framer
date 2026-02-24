@@ -13,7 +13,7 @@ import {
   __toESM,
 } from './framer-chunks/chunk-76VXR6QG.js';
 
-// /:https://app.framerstatic.com/chunk-4AYFENS7.mjs
+// /:https://app.framerstatic.com/chunk-FBBIXJQQ.mjs
 import { createContext, } from 'react';
 import { useEffect, useLayoutEffect, } from 'react';
 import * as React from 'react';
@@ -1002,6 +1002,7 @@ function getSpringOptions(options,) {
     ...options,
   };
   if (!isSpringType(options, physicsKeys,) && isSpringType(options, durationKeys,)) {
+    springOptions.velocity = 0;
     if (options.visualDuration) {
       const visualDuration = options.visualDuration;
       const root = 2 * Math.PI / (visualDuration * 1.2);
@@ -1014,7 +1015,10 @@ function getSpringOptions(options,) {
         damping,
       };
     } else {
-      const derived = findSpring(options,);
+      const derived = findSpring({
+        ...options,
+        velocity: 0,
+      },);
       springOptions = {
         ...springOptions,
         ...derived,
@@ -1922,12 +1926,12 @@ var isCSSVar = (name) => name.startsWith('--',);
 function setStyle(element, name, value,) {
   isCSSVar(name,) ? element.style.setProperty(name, value,) : element.style[name] = value;
 }
-var supportsScrollTimeline = /* @__PURE__ */ memo(() => __unframerWindow.ScrollTimeline !== void 0);
 var supportsFlags = {};
 function memoSupports(callback, supportsFlag,) {
   const memoized = /* @__PURE__ */ memo(callback,);
   return () => supportsFlags[supportsFlag] ?? memoized();
 }
+var supportsScrollTimeline = /* @__PURE__ */ memoSupports(() => __unframerWindow.ScrollTimeline !== void 0, 'scrollTimeline',);
 var supportsLinearEasing = /* @__PURE__ */ memoSupports(() => {
   try {
     document.createElement('div',).animate({
@@ -2102,7 +2106,8 @@ var NativeAnimation = class extends WithPromise {
    * while deferring the commit until the next animation frame.
    */
   commitStyles() {
-    if (!this.isPseudoElement) {
+    const element = this.options?.element;
+    if (!this.isPseudoElement && element?.isConnected) {
       this.animation.commitStyles?.();
     }
   }
@@ -2632,8 +2637,25 @@ function getFinalKeyframe2(keyframes2, {
   const index = repeat && repeatType !== 'loop' && repeat % 2 === 1 ? 0 : resolvedKeyframes.length - 1;
   return !index || finalKeyframe === void 0 ? resolvedKeyframes[index] : finalKeyframe;
 }
+function resolveTransition(transition, parentTransition,) {
+  if (transition?.inherit && parentTransition) {
+    const {
+      inherit: _,
+      ...rest
+    } = transition;
+    return {
+      ...parentTransition,
+      ...rest,
+    };
+  }
+  return transition;
+}
 function getValueTransition(transition, key7,) {
-  return transition?.[key7] ?? transition?.['default'] ?? transition;
+  const valueTransition = transition?.[key7] ?? transition?.['default'] ?? transition;
+  if (valueTransition !== transition) {
+    return resolveTransition(valueTransition, transition,);
+  }
+  return valueTransition;
 }
 function isTransitionDefined({
   when,
@@ -2690,7 +2712,7 @@ var animateMotionValue = (name, value, target, transition = {}, element, isHando
       shouldSkip = true;
     }
   }
-  if (MotionGlobalConfig.instantAnimations || MotionGlobalConfig.skipAnimations) {
+  if (MotionGlobalConfig.instantAnimations || MotionGlobalConfig.skipAnimations || element?.shouldSkipAnimations) {
     shouldSkip = true;
     makeAnimationInstant(options,);
     options.delay = 0;
@@ -3082,10 +3104,13 @@ function animateTarget(visualElement, targetAndTransition, {
   type,
 } = {},) {
   let {
-    transition = visualElement.getDefaultTransition(),
+    transition,
     transitionEnd,
     ...target
   } = targetAndTransition;
+  const defaultTransition = visualElement.getDefaultTransition();
+  transition = transition ? resolveTransition(transition, defaultTransition,) : defaultTransition;
+  const reduceMotion = transition?.reduceMotion;
   if (transitionOverride) transition = transitionOverride;
   const animations2 = [];
   const animationTypeState = type && visualElement.animationState && visualElement.animationState.getState()[type];
@@ -3118,11 +3143,12 @@ function animateTarget(visualElement, targetAndTransition, {
       }
     }
     addValueToWillChange(visualElement, key7,);
+    const shouldReduceMotion = reduceMotion ?? visualElement.shouldReduceMotion;
     value.start(animateMotionValue(
       key7,
       value,
       valueTarget,
-      visualElement.shouldReduceMotion && positionalKeys.has(key7,)
+      shouldReduceMotion && positionalKeys.has(key7,)
         ? {
           type: false,
         }
@@ -3136,11 +3162,15 @@ function animateTarget(visualElement, targetAndTransition, {
     }
   }
   if (transitionEnd) {
-    Promise.all(animations2,).then(() => {
+    const applyTransitionEnd = () =>
       frame.update(() => {
         transitionEnd && setTarget(visualElement, transitionEnd,);
       },);
-    },);
+    if (animations2.length) {
+      Promise.all(animations2,).then(applyTransitionEnd,);
+    } else {
+      applyTransitionEnd();
+    }
   }
   return animations2;
 }
@@ -3248,7 +3278,6 @@ var numberValueTypes = {
   borderBottomWidth: px,
   borderLeftWidth: px,
   borderRadius: px,
-  radius: px,
   borderTopLeftRadius: px,
   borderTopRightRadius: px,
   borderBottomRightRadius: px,
@@ -3292,6 +3321,8 @@ var numberValueTypes = {
   marginInline: px,
   marginInlineStart: px,
   marginInlineEnd: px,
+  // Typography
+  fontSize: px,
   // Misc
   backgroundPositionX: px,
   backgroundPositionY: px,
@@ -3321,6 +3352,21 @@ var filter = {
     return functions ? functions.map(applyDefaultFilter,).join(' ',) : v;
   },
 };
+var mask = {
+  ...complex,
+  getAnimatableNone: (v) => {
+    const parsed = complex.parse(v,);
+    const transformer = complex.createTransformer(v,);
+    return transformer(parsed.map((v2) =>
+      typeof v2 === 'number' ? 0 : typeof v2 === 'object'
+        ? {
+          ...v2,
+          alpha: 1,
+        }
+        : v2
+    ),);
+  },
+};
 var defaultValueTypes = {
   ...numberValueTypes,
   // Color props
@@ -3337,11 +3383,14 @@ var defaultValueTypes = {
   borderLeftColor: color,
   filter,
   WebkitFilter: filter,
+  mask,
+  WebkitMask: mask,
 };
 var getDefaultValueType = (key7) => defaultValueTypes[key7];
+var customTypes = /* @__PURE__ */ new Set([filter, mask,],);
 function getAnimatableNone2(key7, value,) {
   let defaultValueType = getDefaultValueType(key7,);
-  if (defaultValueType !== filter) defaultValueType = complex;
+  if (!customTypes.has(defaultValueType,)) defaultValueType = complex;
   return defaultValueType.getAnimatableNone ? defaultValueType.getAnimatableNone(value,) : void 0;
 }
 function isNone(value,) {
@@ -3488,7 +3537,6 @@ var pxValues = /* @__PURE__ */ new Set([
   'borderBottomWidth',
   'borderLeftWidth',
   'borderRadius',
-  'radius',
   'borderTopLeftRadius',
   'borderTopRightRadius',
   'borderBottomRightRadius',
@@ -3532,6 +3580,8 @@ var pxValues = /* @__PURE__ */ new Set([
   'marginInline',
   'marginInlineStart',
   'marginInlineEnd',
+  // Typography
+  'fontSize',
   // Misc
   'backgroundPositionX',
   'backgroundPositionY',
@@ -3710,7 +3760,8 @@ function buildTransform(state,) {
     if (typeof value === 'number') {
       valueIsDefault = value === (key7.startsWith('scale',) ? 1 : 0);
     } else {
-      valueIsDefault = parseFloat(value,) === 0;
+      const parsed = parseFloat(value,);
+      valueIsDefault = key7.startsWith('scale',) ? parsed === 1 : parsed === 0;
     }
     if (!valueIsDefault) {
       transformIsDefault = false;
@@ -3757,11 +3808,13 @@ var addStyleValue = (element, state, key7, value,) => {
   return state.set(key7, value, render, computed,);
 };
 var styleEffect = /* @__PURE__ */ createSelectorEffect(/* @__PURE__ */ createEffect(addStyleValue,),);
-var toPx = px.transform;
 function addSVGPathValue(element, state, key7, value,) {
   frame.render(() => element.setAttribute('pathLength', '1',));
   if (key7 === 'pathOffset') {
-    return state.set(key7, value, () => element.setAttribute('stroke-dashoffset', toPx(-state.latest[key7],),),);
+    return state.set(key7, value, () => {
+      const offset = state.latest[key7];
+      element.setAttribute('stroke-dashoffset', `${-offset}`,);
+    },);
   } else {
     if (!state.get('stroke-dasharray',)) {
       state.set('stroke-dasharray', new MotionValue('1 1',), () => {
@@ -3769,7 +3822,7 @@ function addSVGPathValue(element, state, key7, value,) {
           pathLength = 1,
           pathSpacing,
         } = state.latest;
-        element.setAttribute('stroke-dasharray', `${toPx(pathLength,)} ${toPx(pathSpacing ?? 1 - Number(pathLength,),)}`,);
+        element.setAttribute('stroke-dasharray', `${pathLength} ${pathSpacing ?? 1 - Number(pathLength,)}`,);
       },);
     }
     return state.set(key7, value, void 0, state.get('stroke-dasharray',),);
@@ -3836,22 +3889,52 @@ function isValidHover(event,) {
 }
 function hover(elementOrSelector, onHoverStart, options = {},) {
   const [elements, eventOptions, cancel,] = setupGesture(elementOrSelector, options,);
-  const onPointerEnter = (enterEvent) => {
-    if (!isValidHover(enterEvent,)) return;
-    const {
-      target,
-    } = enterEvent;
-    const onHoverEnd = onHoverStart(target, enterEvent,);
-    if (typeof onHoverEnd !== 'function' || !target) return;
-    const onPointerLeave = (leaveEvent) => {
-      if (!isValidHover(leaveEvent,)) return;
-      onHoverEnd(leaveEvent,);
-      target.removeEventListener('pointerleave', onPointerLeave,);
-    };
-    target.addEventListener('pointerleave', onPointerLeave, eventOptions,);
-  };
   elements.forEach((element) => {
+    let isPressed = false;
+    let deferredHoverEnd = false;
+    let hoverEndCallback;
+    const removePointerLeave = () => {
+      element.removeEventListener('pointerleave', onPointerLeave,);
+    };
+    const endHover = (event) => {
+      if (hoverEndCallback) {
+        hoverEndCallback(event,);
+        hoverEndCallback = void 0;
+      }
+      removePointerLeave();
+    };
+    const onPointerUp = (event) => {
+      isPressed = false;
+      __unframerWindow.removeEventListener('pointerup', onPointerUp,);
+      __unframerWindow.removeEventListener('pointercancel', onPointerUp,);
+      if (deferredHoverEnd) {
+        deferredHoverEnd = false;
+        endHover(event,);
+      }
+    };
+    const onPointerDown = () => {
+      isPressed = true;
+      __unframerWindow.addEventListener('pointerup', onPointerUp, eventOptions,);
+      __unframerWindow.addEventListener('pointercancel', onPointerUp, eventOptions,);
+    };
+    const onPointerLeave = (leaveEvent) => {
+      if (leaveEvent.pointerType === 'touch') return;
+      if (isPressed) {
+        deferredHoverEnd = true;
+        return;
+      }
+      endHover(leaveEvent,);
+    };
+    const onPointerEnter = (enterEvent) => {
+      if (!isValidHover(enterEvent,)) return;
+      deferredHoverEnd = false;
+      const onHoverEnd = onHoverStart(element, enterEvent,);
+      if (typeof onHoverEnd !== 'function') return;
+      hoverEndCallback = onHoverEnd;
+      element.addEventListener('pointerleave', onPointerLeave, eventOptions,);
+    };
     element.addEventListener('pointerenter', onPointerEnter, eventOptions,);
+    element.addEventListener('pointerdown', onPointerDown, eventOptions,);
   },);
   return cancel;
 }
@@ -3871,9 +3954,13 @@ var isPrimaryPointer = (event) => {
     return event.isPrimary !== false;
   }
 };
-var interactiveElements = /* @__PURE__ */ new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A',],);
+var keyboardAccessibleElements = /* @__PURE__ */ new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A',],);
 function isElementKeyboardAccessible(element,) {
-  return interactiveElements.has(element.tagName,) || element.isContentEditable === true;
+  return keyboardAccessibleElements.has(element.tagName,) || element.isContentEditable === true;
+}
+var textInputElements = /* @__PURE__ */ new Set(['INPUT', 'SELECT', 'TEXTAREA',],);
+function isElementTextInput(element,) {
+  return textInputElements.has(element.tagName,) || element.isContentEditable === true;
 }
 var isPressing = /* @__PURE__ */ new WeakSet();
 function filterEvents(callback,) {
@@ -3909,12 +3996,17 @@ var enableKeyboardPress = (focusEvent, eventOptions,) => {
 function isValidPressEvent(event,) {
   return isPrimaryPointer(event,) && !isDragActive();
 }
+var claimedPointerDownEvents = /* @__PURE__ */ new WeakSet();
 function press(targetOrSelector, onPressStart, options = {},) {
   const [targets, eventOptions, cancelEvents,] = setupGesture(targetOrSelector, options,);
   const startPress = (startEvent) => {
     const target = startEvent.currentTarget;
     if (!isValidPressEvent(startEvent,)) return;
+    if (claimedPointerDownEvents.has(startEvent,)) return;
     isPressing.add(target,);
+    if (options.stopPropagation) {
+      claimedPointerDownEvents.add(startEvent,);
+    }
     const onPressEnd = onPressStart(target, startEvent,);
     const onPointerEnd = (endEvent, success,) => {
       __unframerWindow.removeEventListener('pointerup', onPointerUp,);
@@ -4219,35 +4311,13 @@ function transform(...args) {
   const interpolator = interpolate(inputRange, outputRange, options,);
   return useImmediate ? interpolator(inputValue,) : interpolator;
 }
-function subscribeValue(inputValues, outputValue, getLatest,) {
-  const update = () => outputValue.set(getLatest(),);
-  const scheduleUpdate = () => frame.preRender(update, false, true,);
-  const subscriptions = inputValues.map((v) => v.on('change', scheduleUpdate,));
-  outputValue.on('destroy', () => {
-    subscriptions.forEach((unsubscribe) => unsubscribe());
-    cancelFrame(update,);
-  },);
-}
-function transformValue(transform2,) {
-  const collectedValues = [];
-  collectMotionValues.current = collectedValues;
-  const initialValue = transform2();
-  collectMotionValues.current = void 0;
-  const value = motionValue(initialValue,);
-  subscribeValue(collectedValues, value, transform2,);
-  return value;
-}
-function mapValue(inputValue, inputRange, outputRange, options,) {
-  const map2 = transform(inputRange, outputRange, options,);
-  return transformValue(() => map2(inputValue.get(),));
-}
-function springValue(source, options,) {
+function followValue(source, options,) {
   const initialValue = isMotionValue(source,) ? source.get() : source;
   const value = motionValue(initialValue,);
-  attachSpring(value, source, options,);
+  attachFollow(value, source, options,);
   return value;
 }
-function attachSpring(value, source, options,) {
+function attachFollow(value, source, options = {},) {
   const initialValue = value.get();
   let activeAnimation = null;
   let latestValue = initialValue;
@@ -4261,9 +4331,15 @@ function attachSpring(value, source, options,) {
   };
   const startAnimation2 = () => {
     stopAnimation2();
+    const currentValue = asNumber(value.get(),);
+    const targetValue = asNumber(latestValue,);
+    if (currentValue === targetValue) {
+      return;
+    }
     activeAnimation = new JSAnimation({
-      keyframes: [asNumber(value.get(),), asNumber(latestValue,),],
+      keyframes: [currentValue, targetValue,],
       velocity: value.getVelocity(),
+      // Default to spring if no type specified (matches useSpring behavior)
       type: 'spring',
       restDelta: 1e-3,
       restSpeed: 0.01,
@@ -4297,6 +4373,40 @@ function parseValue(v, unit,) {
 }
 function asNumber(v,) {
   return typeof v === 'number' ? v : parseFloat(v,);
+}
+function subscribeValue(inputValues, outputValue, getLatest,) {
+  const update = () => outputValue.set(getLatest(),);
+  const scheduleUpdate = () => frame.preRender(update, false, true,);
+  const subscriptions = inputValues.map((v) => v.on('change', scheduleUpdate,));
+  outputValue.on('destroy', () => {
+    subscriptions.forEach((unsubscribe) => unsubscribe());
+    cancelFrame(update,);
+  },);
+}
+function transformValue(transform2,) {
+  const collectedValues = [];
+  collectMotionValues.current = collectedValues;
+  const initialValue = transform2();
+  collectMotionValues.current = void 0;
+  const value = motionValue(initialValue,);
+  subscribeValue(collectedValues, value, transform2,);
+  return value;
+}
+function mapValue(inputValue, inputRange, outputRange, options,) {
+  const map2 = transform(inputRange, outputRange, options,);
+  return transformValue(() => map2(inputValue.get(),));
+}
+function springValue(source, options,) {
+  return followValue(source, {
+    type: 'spring',
+    ...options,
+  },);
+}
+function attachSpring(value, source, options,) {
+  return attachFollow(value, source, {
+    type: 'spring',
+    ...options,
+  },);
 }
 var valueTypes = [...dimensionValueTypes, color, complex,];
 var findValueType = (v) => valueTypes.find(testValueType(v,),);
@@ -4594,25 +4704,6 @@ var createBox = () => ({
   x: createAxis(),
   y: createAxis(),
 });
-var prefersReducedMotion = {
-  current: null,
-};
-var hasReducedMotionListener = {
-  current: false,
-};
-var isBrowser2 = typeof __unframerWindow !== 'undefined';
-function initPrefersReducedMotion() {
-  hasReducedMotionListener.current = true;
-  if (!isBrowser2) return;
-  if (__unframerWindow.matchMedia) {
-    const motionMediaQuery = __unframerWindow.matchMedia('(prefers-reduced-motion)',);
-    const setReducedMotionPreferences = () => prefersReducedMotion.current = motionMediaQuery.matches;
-    motionMediaQuery.addEventListener('change', setReducedMotionPreferences,);
-    setReducedMotionPreferences();
-  } else {
-    prefersReducedMotion.current = false;
-  }
-}
 var visualElementStore = /* @__PURE__ */ new WeakMap();
 function isAnimationControls(v,) {
   return v !== null && typeof v === 'object' && typeof v.start === 'function';
@@ -4665,6 +4756,25 @@ function updateMotionValuesFromProps(element, next2, prev,) {
   }
   return next2;
 }
+var prefersReducedMotion = {
+  current: null,
+};
+var hasReducedMotionListener = {
+  current: false,
+};
+var isBrowser2 = typeof __unframerWindow !== 'undefined';
+function initPrefersReducedMotion() {
+  hasReducedMotionListener.current = true;
+  if (!isBrowser2) return;
+  if (__unframerWindow.matchMedia) {
+    const motionMediaQuery = __unframerWindow.matchMedia('(prefers-reduced-motion)',);
+    const setReducedMotionPreferences = () => prefersReducedMotion.current = motionMediaQuery.matches;
+    motionMediaQuery.addEventListener('change', setReducedMotionPreferences,);
+    setReducedMotionPreferences();
+  } else {
+    prefersReducedMotion.current = false;
+  }
+}
 var propEventHandlers = [
   'AnimationStart',
   'AnimationComplete',
@@ -4697,6 +4807,7 @@ var VisualElement = class {
     props,
     presenceContext,
     reducedMotionConfig,
+    skipAnimations,
     blockInitialAnimation,
     visualState,
   }, options = {},) {
@@ -4705,11 +4816,13 @@ var VisualElement = class {
     this.isVariantNode = false;
     this.isControllingVariants = false;
     this.shouldReduceMotion = null;
+    this.shouldSkipAnimations = false;
     this.values = /* @__PURE__ */ new Map();
     this.KeyframeResolver = KeyframeResolver;
     this.features = {};
     this.valueSubscriptions = /* @__PURE__ */ new Map();
     this.prevMotionValues = {};
+    this.hasBeenMounted = false;
     this.events = {};
     this.propEventSubscriptions = {};
     this.notifyUpdate = () => this.notify('Update', this.latestValues,);
@@ -4745,6 +4858,7 @@ var VisualElement = class {
     this.presenceContext = presenceContext;
     this.depth = parent ? parent.depth + 1 : 0;
     this.reducedMotionConfig = reducedMotionConfig;
+    this.skipAnimationsConfig = skipAnimations;
     this.options = options;
     this.blockInitialAnimation = Boolean(blockInitialAnimation,);
     this.isControllingVariants = isControllingVariants(props,);
@@ -4765,6 +4879,12 @@ var VisualElement = class {
     }
   }
   mount(instance,) {
+    if (this.hasBeenMounted) {
+      for (const key7 in this.initialValues) {
+        this.values.get(key7,)?.jump(this.initialValues[key7],);
+        this.latestValues[key7] = this.initialValues[key7];
+      }
+    }
     this.current = instance;
     visualElementStore.set(instance, this,);
     if (this.projection && !this.projection.instance) {
@@ -4791,8 +4911,10 @@ var VisualElement = class {
         'reduced-motion-disabled',
       );
     }
+    this.shouldSkipAnimations = this.skipAnimationsConfig ?? false;
     this.parent?.addChild(this,);
     this.update(this.props, this.presenceContext,);
+    this.hasBeenMounted = true;
   }
   unmount() {
     this.projection && this.projection.unmount();
@@ -4826,6 +4948,29 @@ var VisualElement = class {
   bindToMotionValue(key7, value,) {
     if (this.valueSubscriptions.has(key7,)) {
       this.valueSubscriptions.get(key7,)();
+    }
+    if (value.accelerate && acceleratedValues2.has(key7,) && this.current instanceof HTMLElement) {
+      const {
+        factory,
+        keyframes: keyframes2,
+        times,
+        ease: ease2,
+        duration,
+      } = value.accelerate;
+      const animation = new NativeAnimation({
+        element: this.current,
+        name: key7,
+        keyframes: keyframes2,
+        times,
+        ease: ease2,
+        duration: secondsToMilliseconds(duration,),
+      },);
+      const cleanup = factory(animation,);
+      this.valueSubscriptions.set(key7, () => {
+        cleanup();
+        animation.cancel();
+      },);
+      return;
     }
     const valueIsTransform = transformProps.has(key7,);
     if (valueIsTransform && this.onBindTransform) {
@@ -5279,7 +5424,8 @@ function buildTransform2(latestValues, transform2, transformTemplate2,) {
     if (typeof value === 'number') {
       valueIsDefault = value === (key7.startsWith('scale',) ? 1 : 0);
     } else {
-      valueIsDefault = parseFloat(value,) === 0;
+      const parsed = parseFloat(value,);
+      valueIsDefault = key7.startsWith('scale',) ? parsed === 1 : parsed === 0;
     }
     if (!valueIsDefault || transformTemplate2) {
       const valueAsType = getValueAsType(value, numberValueTypes[key7],);
@@ -5521,10 +5667,8 @@ var camelKeys = {
 function buildSVGPath(attrs, length, spacing = 1, offset = 0, useDashCase = true,) {
   attrs.pathLength = 1;
   const keys23 = useDashCase ? dashKeys : camelKeys;
-  attrs[keys23.offset] = px.transform(-offset,);
-  const pathLength = px.transform(length,);
-  const pathSpacing = px.transform(spacing,);
-  attrs[keys23.array] = `${pathLength} ${pathSpacing}`;
+  attrs[keys23.offset] = `${-offset}`;
+  attrs[keys23.array] = `${length} ${spacing}`;
 }
 var cssMotionPathProperties = ['offsetDistance', 'offsetPath', 'offsetRotate', 'offsetAnchor',];
 function buildSVGAttrs(
@@ -5748,6 +5892,15 @@ function createAnimationState(visualElement,) {
         // Or if the prop doesn't define an animation
         isAnimationControls(prop,) || typeof prop === 'boolean'
       ) {
+        continue;
+      }
+      if (type === 'exit' && typeState.isActive && activeDelta !== true) {
+        if (typeState.prevResolvedValues) {
+          encounteredKeys = {
+            ...encounteredKeys,
+            ...typeState.prevResolvedValues,
+          };
+        }
         continue;
       }
       const variantDidChange = checkVariantsDidChange(typeState.prevProp, prop,);
@@ -6160,6 +6313,14 @@ var NodeStack = class {
   }
   add(node,) {
     addUniqueItem(this.members, node,);
+    for (let i = this.members.length - 1; i >= 0; i--) {
+      const m2 = this.members[i];
+      if (m2 === node || m2 === this.lead || m2 === this.prevLead) continue;
+      const inst = m2.instance;
+      if (inst && inst.isConnected === false && m2.isPresent !== false && !m2.snapshot) {
+        removeItem(this.members, m2,);
+      }
+    }
     node.scheduleRender();
   }
   remove(node,) {
@@ -6180,7 +6341,8 @@ var NodeStack = class {
     let prevLead;
     for (let i = indexOfNode; i >= 0; i--) {
       const member = this.members[i];
-      if (member.isPresent !== false) {
+      const inst = member.instance;
+      if (member.isPresent !== false && (!inst || inst.isConnected !== false)) {
         prevLead = member;
         break;
       }
@@ -6201,16 +6363,25 @@ var NodeStack = class {
     if (prevLead) {
       prevLead.instance && prevLead.scheduleRender();
       node.scheduleRender();
-      node.resumeFrom = prevLead;
-      if (preserveFollowOpacity) {
-        node.resumeFrom.preserveOpacity = true;
-      }
-      if (prevLead.snapshot) {
-        node.snapshot = prevLead.snapshot;
-        node.snapshot.latestValues = prevLead.animationValues || prevLead.latestValues;
-      }
-      if (node.root && node.root.isUpdating) {
-        node.isLayoutDirty = true;
+      const prevDep = prevLead.options.layoutDependency;
+      const nextDep = node.options.layoutDependency;
+      const dependencyMatches = prevDep !== void 0 && nextDep !== void 0 && prevDep === nextDep;
+      if (!dependencyMatches) {
+        const prevInstance = prevLead.instance;
+        const isStale = prevInstance && prevInstance.isConnected === false && !prevLead.snapshot;
+        if (!isStale) {
+          node.resumeFrom = prevLead;
+          if (preserveFollowOpacity) {
+            node.resumeFrom.preserveOpacity = true;
+          }
+          if (prevLead.snapshot) {
+            node.snapshot = prevLead.snapshot;
+            node.snapshot.latestValues = prevLead.animationValues || prevLead.latestValues;
+          }
+          if (node.root && node.root.isUpdating) {
+            node.isLayoutDirty = true;
+          }
+        }
       }
       const {
         crossfade,
@@ -7009,6 +7180,7 @@ function createProjectionNode({
         globalProjectionState.hasAnimatedSinceResize = true;
         activeAnimations.layout++;
         this.motionValue || (this.motionValue = motionValue(0,));
+        this.motionValue.jump(0, false,);
         this.currentAnimation = animateSingleValue(this.motionValue, [0, 1e3,], {
           ...options,
           velocity: 0,
@@ -7431,8 +7603,8 @@ function checkNodeWasScrollRoot(node,) {
 var DocumentProjectionNode = createProjectionNode({
   attachResizeListener: (ref, notify2,) => addDomEvent(ref, 'resize', notify2,),
   measureScroll: () => ({
-    x: document.documentElement.scrollLeft || document.body.scrollLeft,
-    y: document.documentElement.scrollTop || document.body.scrollTop,
+    x: document.documentElement.scrollLeft || document.body?.scrollLeft || 0,
+    y: document.documentElement.scrollTop || document.body?.scrollTop || 0,
   }),
   checkIsScrollRoot: () => true,
 },);
@@ -7482,259 +7654,142 @@ var HTMLProjectionNode = createProjectionNode({
   },
   checkIsScrollRoot: (instance) => Boolean(__unframerWindow.getComputedStyle(instance,).position === 'fixed',),
 },);
-var LAYOUT_SELECTOR = '[data-layout], [data-layout-id]';
-function getLayoutElements(scope,) {
-  const elements = Array.from(scope.querySelectorAll(LAYOUT_SELECTOR,),);
-  if (scope instanceof Element && hasLayout(scope,)) {
-    elements.unshift(scope,);
-  }
-  return elements;
-}
-function getLayoutId(element,) {
-  return element.getAttribute('data-layout-id',);
-}
-function hasLayout(element,) {
-  return element.hasAttribute('data-layout',) || element.hasAttribute('data-layout-id',);
-}
-var scaleCorrectorAdded = false;
-var activeProjectionNodes = /* @__PURE__ */ new WeakMap();
-function ensureScaleCorrectors() {
-  if (scaleCorrectorAdded) return;
-  scaleCorrectorAdded = true;
-  addScaleCorrector({
-    borderRadius: {
-      ...correctBorderRadius,
-      applyTo: ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius',],
-    },
-    borderTopLeftRadius: correctBorderRadius,
-    borderTopRightRadius: correctBorderRadius,
-    borderBottomLeftRadius: correctBorderRadius,
-    borderBottomRightRadius: correctBorderRadius,
-    boxShadow: correctBoxShadow,
-  },);
-}
-function getDepth(element,) {
-  let depth = 0;
-  let current2 = element.parentElement;
-  while (current2) {
-    depth++;
-    current2 = current2.parentElement;
-  }
-  return depth;
-}
-function findProjectionParent(element, nodeCache,) {
-  let parent = element.parentElement;
-  while (parent) {
-    const node = nodeCache.get(parent,);
-    if (node) return node;
-    parent = parent.parentElement;
-  }
-  return void 0;
-}
-function createProjectionNode2(element, parent, options, transition,) {
-  const existingNode = activeProjectionNodes.get(element,);
-  if (existingNode) {
-    const visualElement2 = existingNode.options.visualElement;
-    const nodeTransition2 = transition
-      ? {
-        duration: transition.duration,
-        ease: transition.ease,
-      }
-      : {
-        duration: 0.3,
-        ease: 'easeOut',
-      };
-    existingNode.setOptions({
-      ...existingNode.options,
-      animate: true,
-      transition: nodeTransition2,
-      ...options,
-    },);
-    if (!existingNode.instance) {
-      existingNode.mount(element,);
-    }
-    return {
-      node: existingNode,
-      visualElement: visualElement2,
-    };
-  }
-  const latestValues = {};
-  const visualElement = new HTMLVisualElement({
-    visualState: {
-      latestValues,
-      renderState: {
-        transformOrigin: {},
-        transform: {},
-        style: {},
-        vars: {},
-      },
-    },
-    presenceContext: null,
-    props: {},
-  },);
-  const node = new HTMLProjectionNode(latestValues, parent,);
-  const nodeTransition = transition
-    ? {
-      duration: transition.duration,
-      ease: transition.ease,
-    }
-    : {
-      duration: 0.3,
-      ease: 'easeOut',
-    };
-  node.setOptions({
-    visualElement,
-    layout: true,
-    animate: true,
-    transition: nodeTransition,
-    ...options,
-  },);
-  node.mount(element,);
-  visualElement.projection = node;
-  activeProjectionNodes.set(element, node,);
+var layoutSelector = '[data-layout], [data-layout-id]';
+var noop2 = () => {};
+function snapshotFromTarget(projection,) {
+  const target = projection.targetWithTransforms || projection.target;
+  if (!target) return void 0;
+  const measuredBox = createBox();
+  const layoutBox = createBox();
+  copyBoxInto(measuredBox, target,);
+  copyBoxInto(layoutBox, target,);
   return {
-    node,
-    visualElement,
+    animationId: projection.root?.animationId ?? 0,
+    measuredBox,
+    layoutBox,
+    latestValues: projection.animationValues || projection.latestValues || {},
+    source: projection.id,
   };
-}
-function buildProjectionTree(elements, existingContext, options,) {
-  ensureScaleCorrectors();
-  const nodes = existingContext?.nodes ?? /* @__PURE__ */ new Map();
-  const visualElements = existingContext?.visualElements ?? /* @__PURE__ */ new Map();
-  const group = existingContext?.group ?? nodeGroup();
-  const defaultTransition = options?.defaultTransition;
-  const sharedTransitions = options?.sharedTransitions;
-  const sorted = [...elements,].sort((a, b,) => getDepth(a,) - getDepth(b,));
-  let root = existingContext?.root;
-  for (const element of sorted) {
-    if (nodes.has(element,)) continue;
-    const parent = findProjectionParent(element, nodes,);
-    const layoutId = getLayoutId(element,);
-    const layoutMode = element.getAttribute('data-layout',);
-    const nodeOptions = {
-      layoutId: layoutId ?? void 0,
-      animationType: parseLayoutMode(layoutMode,),
-    };
-    const transition = layoutId && sharedTransitions?.get(layoutId,) ? sharedTransitions.get(layoutId,) : defaultTransition;
-    const {
-      node,
-      visualElement,
-    } = createProjectionNode2(element, parent, nodeOptions, transition,);
-    nodes.set(element, node,);
-    visualElements.set(element, visualElement,);
-    group.add(node,);
-    if (!root) {
-      root = node.root;
-    }
-  }
-  return {
-    nodes,
-    visualElements,
-    group,
-    root,
-  };
-}
-function parseLayoutMode(value,) {
-  if (value === 'position') return 'position';
-  if (value === 'size') return 'size';
-  if (value === 'preserve-aspect') return 'preserve-aspect';
-  return 'both';
-}
-function cleanupProjectionTree(context, elementsToCleanup,) {
-  const elementsToProcess = elementsToCleanup
-    ? [...context.nodes.entries(),].filter(([el,],) => elementsToCleanup.has(el,))
-    : [...context.nodes.entries(),];
-  for (const [element, node,] of elementsToProcess) {
-    context.group.remove(node,);
-    node.unmount();
-    if (activeProjectionNodes.get(element,) === node) {
-      activeProjectionNodes.delete(element,);
-    }
-    context.nodes.delete(element,);
-    context.visualElements.delete(element,);
-  }
 }
 var LayoutAnimationBuilder = class {
   constructor(scope, updateDom, defaultOptions,) {
     this.sharedTransitions = /* @__PURE__ */ new Map();
-    this.notifyReady = noop;
-    this.executed = false;
+    this.notifyReady = noop2;
+    this.rejectReady = noop2;
     this.scope = scope;
     this.updateDom = updateDom;
     this.defaultOptions = defaultOptions;
-    this.readyPromise = new Promise((resolve) => {
+    this.readyPromise = new Promise((resolve, reject,) => {
       this.notifyReady = resolve;
+      this.rejectReady = reject;
     },);
-    queueMicrotask(() => this.execute());
+    frame.postRender(() => {
+      this.start().then(this.notifyReady,).catch(this.rejectReady,);
+    },);
   }
-  shared(id4, options,) {
-    this.sharedTransitions.set(id4, options,);
+  shared(id4, transition,) {
+    this.sharedTransitions.set(id4, transition,);
     return this;
   }
-  then(onfulfilled, onrejected,) {
-    return this.readyPromise.then(onfulfilled, onrejected,);
+  then(resolve, reject,) {
+    return this.readyPromise.then(resolve, reject,);
   }
-  async execute() {
-    if (this.executed) return;
-    this.executed = true;
-    let context;
-    const beforeElements = getLayoutElements(this.scope,);
-    if (beforeElements.length > 0) {
-      context = buildProjectionTree(beforeElements, void 0, this.getBuildOptions(),);
-      context.root.startUpdate();
-      for (const node of context.nodes.values()) {
-        node.isLayoutDirty = false;
-        node.willUpdate();
-      }
-    }
-    this.updateDom();
-    const afterElements = getLayoutElements(this.scope,);
-    const beforeSet = new Set(beforeElements,);
-    const afterSet = new Set(afterElements,);
-    const entering = afterElements.filter((el) => !beforeSet.has(el,));
-    const exiting = beforeElements.filter((el) => !afterSet.has(el,));
-    if (entering.length > 0) {
-      context = buildProjectionTree(entering, context, this.getBuildOptions(),);
-    }
-    if (!context) {
-      this.notifyReady(new GroupAnimation([],),);
-      return;
-    }
-    for (const element of exiting) {
-      const node = context.nodes.get(element,);
-      node?.getStack()?.remove(node,);
-    }
-    for (const element of entering) {
-      context.nodes.get(element,)?.promote();
-    }
-    context.root.didUpdate();
-    await new Promise((resolve) => frame.postRender(() => resolve()));
-    const animations2 = [];
-    for (const node of context.nodes.values()) {
-      if (node.currentAnimation) {
-        animations2.push(node.currentAnimation,);
-      }
-    }
-    const groupAnimation = new GroupAnimation(animations2,);
-    groupAnimation.finished.then(() => {
-      const elementsToCleanup = /* @__PURE__ */ new Set();
-      for (const element of context.nodes.keys()) {
-        if (!document.contains(element,)) {
-          elementsToCleanup.add(element,);
+  async start() {
+    const beforeElements = collectLayoutElements(this.scope,);
+    const beforeRecords = this.buildRecords(beforeElements,);
+    beforeRecords.forEach(({
+      projection,
+    },) => {
+      const hasCurrentAnimation = Boolean(projection.currentAnimation,);
+      const isSharedLayout = Boolean(projection.options.layoutId,);
+      if (hasCurrentAnimation && isSharedLayout) {
+        const snapshot = snapshotFromTarget(projection,);
+        if (snapshot) {
+          projection.snapshot = snapshot;
+        } else if (projection.snapshot) {
+          projection.snapshot = void 0;
         }
+      } else if (projection.snapshot && (projection.currentAnimation || projection.isProjecting())) {
+        projection.snapshot = void 0;
       }
-      cleanupProjectionTree(context, elementsToCleanup,);
+      projection.isPresent = true;
+      projection.willUpdate();
     },);
-    this.notifyReady(groupAnimation,);
+    await this.updateDom();
+    const afterElements = collectLayoutElements(this.scope,);
+    const afterRecords = this.buildRecords(afterElements,);
+    this.handleExitingElements(beforeRecords, afterRecords,);
+    afterRecords.forEach(({
+      projection,
+    },) => {
+      const instance = projection.instance;
+      const resumeFromInstance = projection.resumeFrom?.instance;
+      if (!instance || !resumeFromInstance) return;
+      if (!('style' in instance)) return;
+      const currentTransform = instance.style.transform;
+      const resumeFromTransform = resumeFromInstance.style.transform;
+      if (currentTransform && resumeFromTransform && currentTransform === resumeFromTransform) {
+        instance.style.transform = '';
+        instance.style.transformOrigin = '';
+      }
+    },);
+    afterRecords.forEach(({
+      projection,
+    },) => {
+      projection.isPresent = true;
+    },);
+    const root = getProjectionRoot(afterRecords, beforeRecords,);
+    root?.didUpdate();
+    await new Promise((resolve) => {
+      frame.postRender(() => resolve());
+    },);
+    const animations2 = collectAnimations(afterRecords,);
+    const animation = new GroupAnimation(animations2,);
+    return animation;
   }
-  getBuildOptions() {
-    return {
-      defaultTransition: this.defaultOptions || {
-        duration: 0.3,
-        ease: 'easeOut',
-      },
-      sharedTransitions: this.sharedTransitions.size > 0 ? this.sharedTransitions : void 0,
-    };
+  buildRecords(elements,) {
+    const records = [];
+    const recordMap = /* @__PURE__ */ new Map();
+    for (const element of elements) {
+      const parentRecord = findParentRecord(element, recordMap, this.scope,);
+      const {
+        layout: layout2,
+        layoutId,
+      } = readLayoutAttributes(element,);
+      const override = layoutId ? this.sharedTransitions.get(layoutId,) : void 0;
+      const transition = override || this.defaultOptions;
+      const record2 = getOrCreateRecord(element, parentRecord?.projection, {
+        layout: layout2,
+        layoutId,
+        animationType: typeof layout2 === 'string' ? layout2 : 'both',
+        transition,
+      },);
+      recordMap.set(element, record2,);
+      records.push(record2,);
+    }
+    return records;
+  }
+  handleExitingElements(beforeRecords, afterRecords,) {
+    const afterElementsSet = new Set(afterRecords.map((record2) => record2.element),);
+    beforeRecords.forEach((record2) => {
+      if (afterElementsSet.has(record2.element,)) return;
+      if (record2.projection.options.layoutId) {
+        record2.projection.isPresent = false;
+        record2.projection.relegate();
+      }
+      record2.visualElement.unmount();
+      visualElementStore.delete(record2.element,);
+    },);
+    const beforeElementsSet = new Set(beforeRecords.map((record2) => record2.element),);
+    afterRecords.forEach(({
+      element,
+      projection,
+    },) => {
+      if (beforeElementsSet.has(element,) && projection.resumeFrom && !projection.resumeFrom.instance && !projection.isLead()) {
+        projection.resumeFrom = void 0;
+        projection.snapshot = void 0;
+      }
+    },);
   }
 };
 function parseAnimateLayoutArgs(scopeOrUpdateDom, updateDomOrOptions, options,) {
@@ -7748,10 +7803,96 @@ function parseAnimateLayoutArgs(scopeOrUpdateDom, updateDomOrOptions, options,) 
   const elements = resolveElements(scopeOrUpdateDom,);
   const scope = elements[0] || document;
   return {
-    scope: scope instanceof Document ? scope : scope,
+    scope,
     updateDom: updateDomOrOptions,
     defaultOptions: options,
   };
+}
+function collectLayoutElements(scope,) {
+  const elements = Array.from(scope.querySelectorAll(layoutSelector,),);
+  if (scope instanceof Element && scope.matches(layoutSelector,)) {
+    if (!elements.includes(scope,)) {
+      elements.unshift(scope,);
+    }
+  }
+  return elements;
+}
+function readLayoutAttributes(element,) {
+  const layoutId = element.getAttribute('data-layout-id',) || void 0;
+  const rawLayout = element.getAttribute('data-layout',);
+  let layout2;
+  if (rawLayout === '' || rawLayout === 'true') {
+    layout2 = true;
+  } else if (rawLayout) {
+    layout2 = rawLayout;
+  }
+  return {
+    layout: layout2,
+    layoutId,
+  };
+}
+function createVisualState() {
+  return {
+    latestValues: {},
+    renderState: {
+      transform: {},
+      transformOrigin: {},
+      style: {},
+      vars: {},
+    },
+  };
+}
+function getOrCreateRecord(element, parentProjection, projectionOptions,) {
+  const existing = visualElementStore.get(element,);
+  const visualElement = existing ?? new HTMLVisualElement({
+    props: {},
+    presenceContext: null,
+    visualState: createVisualState(),
+  }, {
+    allowProjection: true,
+  },);
+  if (!existing || !visualElement.projection) {
+    visualElement.projection = new HTMLProjectionNode(visualElement.latestValues, parentProjection,);
+  }
+  visualElement.projection.setOptions({
+    ...projectionOptions,
+    visualElement,
+  },);
+  if (!visualElement.current) {
+    visualElement.mount(element,);
+  } else if (!visualElement.projection.instance) {
+    visualElement.projection.mount(element,);
+  }
+  if (!existing) {
+    visualElementStore.set(element, visualElement,);
+  }
+  return {
+    element,
+    visualElement,
+    projection: visualElement.projection,
+  };
+}
+function findParentRecord(element, recordMap, scope,) {
+  let parent = element.parentElement;
+  while (parent) {
+    const record2 = recordMap.get(parent,);
+    if (record2) return record2;
+    if (parent === scope) break;
+    parent = parent.parentElement;
+  }
+  return void 0;
+}
+function getProjectionRoot(afterRecords, beforeRecords,) {
+  const record2 = afterRecords[0] || beforeRecords[0];
+  return record2?.projection.root;
+}
+function collectAnimations(afterRecords,) {
+  const animations2 = /* @__PURE__ */ new Set();
+  afterRecords.forEach((record2) => {
+    const animation = record2.projection.currentAnimation;
+    if (animation) animations2.add(animation,);
+  },);
+  return Array.from(animations2,);
 }
 var sync = frame;
 var cancelSync = stepsOrder.reduce((acc, key7,) => {
@@ -7800,15 +7941,17 @@ function useComposedRefs(...refs) {
 var PopChildMeasure = class extends React.Component {
   getSnapshotBeforeUpdate(prevProps,) {
     const element = this.props.childRef.current;
-    if (element && prevProps.isPresent && !this.props.isPresent) {
+    if (element && prevProps.isPresent && !this.props.isPresent && this.props.pop !== false) {
       const parent = element.offsetParent;
       const parentWidth = isHTMLElement(parent,) ? parent.offsetWidth || 0 : 0;
+      const parentHeight = isHTMLElement(parent,) ? parent.offsetHeight || 0 : 0;
       const size = this.props.sizeRef.current;
       size.height = element.offsetHeight || 0;
       size.width = element.offsetWidth || 0;
       size.top = element.offsetTop;
       size.left = element.offsetLeft;
       size.right = parentWidth - size.width - size.left;
+      size.bottom = parentHeight - size.height - size.top;
     }
     return null;
   }
@@ -7824,7 +7967,9 @@ function PopChild({
   children,
   isPresent: isPresent2,
   anchorX,
+  anchorY,
   root,
+  pop,
 },) {
   const id4 = useId();
   const ref = useRef(null,);
@@ -7834,6 +7979,7 @@ function PopChild({
     top: 0,
     left: 0,
     right: 0,
+    bottom: 0,
   },);
   const {
     nonce,
@@ -7847,9 +7993,11 @@ function PopChild({
       top,
       left,
       right,
+      bottom,
     } = size.current;
-    if (isPresent2 || !ref.current || !width || !height) return;
+    if (isPresent2 || pop === false || !ref.current || !width || !height) return;
     const x = anchorX === 'left' ? `left: ${left}` : `right: ${right}`;
+    const y = anchorY === 'bottom' ? `bottom: ${bottom}` : `top: ${top}`;
     ref.current.dataset.motionPopId = id4;
     const style2 = document.createElement('style',);
     if (nonce) style2.nonce = nonce;
@@ -7862,7 +8010,7 @@ function PopChild({
             width: ${width}px !important;
             height: ${height}px !important;
             ${x}px !important;
-            top: ${top}px !important;
+            ${y}px !important;
           }
         `,);
     }
@@ -7876,7 +8024,8 @@ function PopChild({
     isPresent: isPresent2,
     childRef: ref,
     sizeRef: size,
-    children: React.cloneElement(children, {
+    pop,
+    children: pop === false ? children : React.cloneElement(children, {
       ref: composedRef,
     },),
   },);
@@ -7897,6 +8046,7 @@ var PresenceChild = ({
   presenceAffectsLayout,
   mode,
   anchorX,
+  anchorY,
   root,
 },) => {
   const presenceChildren = useConstant(newChildrenMap,);
@@ -7933,14 +8083,14 @@ var PresenceChild = ({
   React.useEffect(() => {
     !isPresent2 && !presenceChildren.size && onExitComplete && onExitComplete();
   }, [isPresent2,],);
-  if (mode === 'popLayout') {
-    children = jsx(PopChild, {
-      isPresent: isPresent2,
-      anchorX,
-      root,
-      children,
-    },);
-  }
+  children = jsx(PopChild, {
+    pop: mode === 'popLayout',
+    isPresent: isPresent2,
+    anchorX,
+    anchorY,
+    root,
+    children,
+  },);
   return jsx(PresenceContext.Provider, {
     value: context,
     children,
@@ -7989,6 +8139,7 @@ var AnimatePresence = ({
   mode = 'sync',
   propagate = false,
   anchorX = 'left',
+  anchorY = 'top',
   root,
 },) => {
   const [isParentPresent, safeToRemove,] = usePresence(propagate,);
@@ -8075,6 +8226,7 @@ var AnimatePresence = ({
         root,
         onExitComplete: isPresent2 ? void 0 : onExit,
         anchorX,
+        anchorY,
         children: child,
       }, key7,);
     },),
@@ -8237,6 +8389,7 @@ var validMotionProps = /* @__PURE__ */ new Set([
   'onViewportEnter',
   'onViewportLeave',
   'globalTapTarget',
+  'propagate',
   'ignoreStrict',
   'viewport',
 ],);
@@ -8272,12 +8425,19 @@ function MotionConfig({
   ...config
 },) {
   isValidProp && loadExternalIsValidProp(isValidProp,);
+  const parentConfig = useContext(MotionConfigContext,);
   config = {
-    ...useContext(MotionConfigContext,),
+    ...parentConfig,
     ...config,
   };
+  config.transition = resolveTransition(config.transition, parentConfig.transition,);
   config.isStatic = useConstant(() => config.isStatic);
-  const context = useMemo(() => config, [JSON.stringify(config.transition,), config.transformPagePoint, config.reducedMotion,],);
+  const context = useMemo(() => config, [
+    JSON.stringify(config.transition,),
+    config.transformPagePoint,
+    config.reducedMotion,
+    config.skipAnimations,
+  ],);
   return jsx(MotionConfigContext.Provider, {
     value: context,
     children,
@@ -8580,8 +8740,11 @@ function useVisualElement(Component33, visualState, props, createVisualElement, 
   } = useContext(MotionContext,);
   const lazyContext = useContext(LazyContext,);
   const presenceContext = useContext(PresenceContext,);
-  const reducedMotionConfig = useContext(MotionConfigContext,).reducedMotion;
+  const motionConfig = useContext(MotionConfigContext,);
+  const reducedMotionConfig = motionConfig.reducedMotion;
+  const skipAnimations = motionConfig.skipAnimations;
   const visualElementRef = useRef(null,);
+  const hasMountedOnce = useRef(false,);
   createVisualElement = createVisualElement || lazyContext.renderer;
   if (!visualElementRef.current && createVisualElement) {
     visualElementRef.current = createVisualElement(Component33, {
@@ -8591,8 +8754,12 @@ function useVisualElement(Component33, visualState, props, createVisualElement, 
       presenceContext,
       blockInitialAnimation: presenceContext ? presenceContext.initial === false : false,
       reducedMotionConfig,
+      skipAnimations,
       isSVG,
     },);
+    if (hasMountedOnce.current && visualElementRef.current) {
+      visualElementRef.current.manuallyAnimateOnMount = true;
+    }
   }
   const visualElement = visualElementRef.current;
   const initialLayoutGroupConfig = useContext(SwitchLayoutGroupContext,);
@@ -8600,7 +8767,7 @@ function useVisualElement(Component33, visualState, props, createVisualElement, 
     visualElement && !visualElement.projection && ProjectionNodeConstructor &&
     (visualElement.type === 'html' || visualElement.type === 'svg')
   ) {
-    createProjectionNode3(visualElementRef.current, props, ProjectionNodeConstructor, initialLayoutGroupConfig,);
+    createProjectionNode2(visualElementRef.current, props, ProjectionNodeConstructor, initialLayoutGroupConfig,);
   }
   const isMounted = useRef(false,);
   useInsertionEffect(() => {
@@ -8614,6 +8781,7 @@ function useVisualElement(Component33, visualState, props, createVisualElement, 
       __unframerWindow.MotionHasOptimisedAnimation?.(optimisedAppearId,),
   );
   useIsomorphicLayoutEffect(() => {
+    hasMountedOnce.current = true;
     if (!visualElement) return;
     isMounted.current = true;
     __unframerWindow.MotionIsMounted = true;
@@ -8638,7 +8806,7 @@ function useVisualElement(Component33, visualState, props, createVisualElement, 
   },);
   return visualElement;
 }
-function createProjectionNode3(visualElement, props, ProjectionNodeConstructor, initialPromotionConfig,) {
+function createProjectionNode2(visualElement, props, ProjectionNodeConstructor, initialPromotionConfig,) {
   const {
     layoutId,
     layout: layout2,
@@ -9045,11 +9213,8 @@ var PanSession = class {
     },);
     __unframerWindow.addEventListener('scroll', this.onElementScroll, {
       capture: true,
-      passive: true,
     },);
-    __unframerWindow.addEventListener('scroll', this.onWindowScroll, {
-      passive: true,
-    },);
+    __unframerWindow.addEventListener('scroll', this.onWindowScroll,);
     this.removeScrollListeners = () => {
       __unframerWindow.removeEventListener('scroll', this.onElementScroll, {
         capture: true,
@@ -9156,6 +9321,12 @@ function getVelocity(history, timeDelta2,) {
       x: 0,
       y: 0,
     };
+  }
+  if (
+    timestampedPoint === history[0] && history.length > 2 &&
+    lastPoint.timestamp - timestampedPoint.timestamp > secondsToMilliseconds(timeDelta2,) * 2
+  ) {
+    timestampedPoint = history[1];
   }
   const time2 = millisecondsToSeconds(lastPoint.timestamp - timestampedPoint.timestamp,);
   if (time2 === 0) {
@@ -9290,14 +9461,11 @@ var VisualElementDragControls = class {
     if (presenceContext && presenceContext.isPresent === false) return;
     const onSessionStart = (event) => {
       if (snapToCursor) {
-        this.stopAnimation();
         this.snapToCursor(extractEventInfo(event,).point,);
-      } else {
-        this.pauseAnimation();
       }
+      this.stopAnimation();
     };
     const onStart = (event, info,) => {
-      this.stopAnimation();
       const {
         drag: drag2,
         dragPropagation,
@@ -9334,7 +9502,7 @@ var VisualElementDragControls = class {
         this.originPoint[axis] = current2;
       },);
       if (onDragStart) {
-        frame.postRender(() => onDragStart(event, info,));
+        frame.update(() => onDragStart(event, info,), false, true,);
       }
       addValueToWillChange(this.visualElement, 'transform',);
       const {
@@ -9365,7 +9533,9 @@ var VisualElementDragControls = class {
       this.updateAxis('x', info.point, offset,);
       this.updateAxis('y', info.point, offset,);
       this.visualElement.render();
-      onDrag && onDrag(event, info,);
+      if (onDrag) {
+        frame.update(() => onDrag(event, info,), false, true,);
+      }
     };
     const onSessionEnd = (event, info,) => {
       this.latestPointerEvent = event;
@@ -9374,8 +9544,17 @@ var VisualElementDragControls = class {
       this.latestPointerEvent = null;
       this.latestPanInfo = null;
     };
-    const resumeAnimation = () =>
-      eachAxis((axis) => this.getAnimationState(axis,) === 'paused' && this.getAxisMotionValue(axis,).animation?.play());
+    const resumeAnimation = () => {
+      const {
+        dragSnapToOrigin: snap,
+      } = this.getProps();
+      if (snap || this.constraints) {
+        this.startAnimation({
+          x: 0,
+          y: 0,
+        },);
+      }
+    };
     const {
       dragSnapToOrigin,
     } = this.getProps();
@@ -9425,8 +9604,7 @@ var VisualElementDragControls = class {
     if (projection) {
       projection.isAnimationBlocked = false;
     }
-    this.panSession && this.panSession.end();
-    this.panSession = void 0;
+    this.endPanSession();
     const {
       dragPropagation,
     } = this.getProps();
@@ -9435,6 +9613,16 @@ var VisualElementDragControls = class {
       this.openDragLock = null;
     }
     animationState && animationState.setActive('whileDrag', false,);
+  }
+  /**
+   * Clean up the pan session without modifying other drag state.
+   * This is used during unmount to ensure event listeners are removed
+   * without affecting projection animations or drag locks.
+   * @internal
+   */
+  endPanSession() {
+    this.panSession && this.panSession.end();
+    this.panSession = void 0;
   }
   updateAxis(axis, _point, offset,) {
     const {
@@ -9469,7 +9657,9 @@ var VisualElementDragControls = class {
       }
     }
     this.elastic = resolveDragElastic(dragElastic,);
-    if (prevConstraints !== this.constraints && layout2 && this.constraints && !this.hasMutatedConstraints) {
+    if (
+      prevConstraints !== this.constraints && !isRefObject(dragConstraints,) && layout2 && this.constraints && !this.hasMutatedConstraints
+    ) {
       eachAxis((axis) => {
         if (this.constraints !== false && this.getAxisMotionValue(axis,)) {
           this.constraints[axis] = rebaseAxisConstraints(layout2.layoutBox[axis], this.constraints[axis],);
@@ -9550,12 +9740,6 @@ var VisualElementDragControls = class {
   stopAnimation() {
     eachAxis((axis) => this.getAxisMotionValue(axis,).stop());
   }
-  pauseAnimation() {
-    eachAxis((axis) => this.getAxisMotionValue(axis,).animation?.pause());
-  }
-  getAnimationState(axis,) {
-    return this.getAxisMotionValue(axis,).animation?.state;
-  }
   /**
    * Drag works differently depending on which props are provided.
    *
@@ -9626,6 +9810,7 @@ var VisualElementDragControls = class {
     this.visualElement.current.style.transform = transformTemplate2 ? transformTemplate2({}, '',) : 'none';
     projection.root && projection.root.updateScroll();
     projection.updateLayout();
+    this.constraints = false;
     this.resolveConstraints();
     eachAxis((axis) => {
       if (!shouldDrag(axis, drag2, null,)) return;
@@ -9636,6 +9821,7 @@ var VisualElementDragControls = class {
       } = this.constraints[axis];
       axisValue.set(mixNumber(min, max, boxProgress[axis],),);
     },);
+    this.visualElement.render();
   }
   addListeners() {
     if (!this.visualElement.current) return;
@@ -9647,17 +9833,21 @@ var VisualElementDragControls = class {
         dragListener = true,
       } = this.getProps();
       const target = event.target;
-      const isClickingKeyboardAccessibleChild = target !== element && isElementKeyboardAccessible(target,);
-      if (drag2 && dragListener && !isClickingKeyboardAccessibleChild) {
+      const isClickingTextInputChild = target !== element && isElementTextInput(target,);
+      if (drag2 && dragListener && !isClickingTextInputChild) {
         this.start(event,);
       }
     },);
+    let stopResizeObservers;
     const measureDragConstraints = () => {
       const {
         dragConstraints,
       } = this.getProps();
       if (isRefObject(dragConstraints,) && dragConstraints.current) {
         this.constraints = this.resolveRefConstraints();
+        if (!stopResizeObservers) {
+          stopResizeObservers = startResizeObservers(element, dragConstraints.current, () => this.scalePositionWithinConstraints(),);
+        }
       }
     };
     const {
@@ -9689,6 +9879,7 @@ var VisualElementDragControls = class {
       stopPointerListener();
       stopMeasureLayoutListener();
       stopLayoutUpdateListener && stopLayoutUpdateListener();
+      stopResizeObservers && stopResizeObservers();
     };
   }
   getProps() {
@@ -9712,6 +9903,24 @@ var VisualElementDragControls = class {
     };
   }
 };
+function skipFirstCall(callback,) {
+  let isFirst = true;
+  return () => {
+    if (isFirst) {
+      isFirst = false;
+      return;
+    }
+    callback();
+  };
+}
+function startResizeObservers(element, constraintsElement, onResize,) {
+  const stopElement = resize(element, skipFirstCall(onResize,),);
+  const stopContainer = resize(constraintsElement, skipFirstCall(onResize,),);
+  return () => {
+    stopElement();
+    stopContainer();
+  };
+}
 function shouldDrag(direction, drag2, currentDirection,) {
   return (drag2 === true || drag2 === direction) && (currentDirection === null || currentDirection === direction);
 }
@@ -9757,11 +9966,14 @@ var DragGesture = class extends Feature {
   unmount() {
     this.removeGroupControls();
     this.removeListeners();
+    if (!this.controls.isDragging) {
+      this.controls.endPanSession();
+    }
   }
 };
 var asyncHandler = (handler) => (event, info,) => {
   if (handler) {
-    frame.postRender(() => handler(event, info,));
+    frame.update(() => handler(event, info,), false, true,);
   }
 };
 var PanGesture = class extends Feature {
@@ -9785,7 +9997,7 @@ var PanGesture = class extends Feature {
     return {
       onSessionStart: asyncHandler(onPanSessionStart,),
       onStart: asyncHandler(onPanStart,),
-      onMove: onPan,
+      onMove: asyncHandler(onPan,),
       onEnd: (event, info,) => {
         delete this.session;
         if (onPanEnd) {
@@ -9835,6 +10047,7 @@ var MeasureLayoutWithContext = class extends Component2 {
       },);
       projection.setOptions({
         ...projection.options,
+        layoutDependency: this.props.layoutDependency,
         onExitComplete: () => this.safeToRemove(),
       },);
     }
@@ -9852,6 +10065,12 @@ var MeasureLayoutWithContext = class extends Component2 {
     } = visualElement;
     if (!projection) return null;
     projection.isPresent = isPresent2;
+    if (prevProps.layoutDependency !== layoutDependency) {
+      projection.setOptions({
+        ...projection.options,
+        layoutDependency,
+      },);
+    }
     hasTakenAnySnapshot = true;
     if (drag2 || prevProps.layoutDependency !== layoutDependency || layoutDependency === void 0 || prevProps.isPresent !== isPresent2) {
       projection.willUpdate();
@@ -10009,13 +10228,18 @@ var PressGesture = class extends Feature {
       current: current2,
     } = this.node;
     if (!current2) return;
+    const {
+      globalTapTarget,
+      propagate,
+    } = this.node.props;
     this.unmount = press(current2, (_element, startEvent,) => {
       handlePressEvent(this.node, startEvent, 'Start',);
       return (endEvent, {
         success,
       },) => handlePressEvent(this.node, endEvent, success ? 'End' : 'Cancel',);
     }, {
-      useGlobalTarget: this.node.props.globalTapTarget,
+      useGlobalTarget: globalTapTarget,
+      stopPropagation: propagate?.tap === false,
     },);
   }
   unmount() {}
@@ -10403,9 +10627,12 @@ function createOnScrollHandler(element, onScroll, info, options = {},) {
 var scrollListeners = /* @__PURE__ */ new WeakMap();
 var resizeListeners = /* @__PURE__ */ new WeakMap();
 var onScrollHandlers = /* @__PURE__ */ new WeakMap();
+var scrollSize = /* @__PURE__ */ new WeakMap();
+var dimensionCheckProcesses = /* @__PURE__ */ new WeakMap();
 var getEventTarget = (element) => element === document.scrollingElement ? __unframerWindow : element;
 function scrollInfo(onScroll, {
   container = document.scrollingElement,
+  trackContentSize = false,
   ...options
 } = {},) {
   if (!container) return noop;
@@ -10432,16 +10659,31 @@ function scrollInfo(onScroll, {
     const listener2 = () => frame.read(measureAll,);
     scrollListeners.set(container, listener2,);
     const target = getEventTarget(container,);
-    __unframerWindow.addEventListener('resize', listener2, {
-      passive: true,
-    },);
+    __unframerWindow.addEventListener('resize', listener2,);
     if (container !== document.documentElement) {
       resizeListeners.set(container, resize(container, listener2,),);
     }
-    target.addEventListener('scroll', listener2, {
-      passive: true,
-    },);
+    target.addEventListener('scroll', listener2,);
     listener2();
+  }
+  if (trackContentSize && !dimensionCheckProcesses.has(container,)) {
+    const listener2 = scrollListeners.get(container,);
+    const size = {
+      width: container.scrollWidth,
+      height: container.scrollHeight,
+    };
+    scrollSize.set(container, size,);
+    const checkScrollDimensions = () => {
+      const newWidth = container.scrollWidth;
+      const newHeight = container.scrollHeight;
+      if (size.width !== newWidth || size.height !== newHeight) {
+        listener2();
+        size.width = newWidth;
+        size.height = newHeight;
+      }
+    };
+    const dimensionCheckProcess = frame.read(checkScrollDimensions, true,);
+    dimensionCheckProcesses.set(container, dimensionCheckProcess,);
   }
   const listener = scrollListeners.get(container,);
   frame.read(listener, false, true,);
@@ -10458,7 +10700,16 @@ function scrollInfo(onScroll, {
       resizeListeners.get(container,)?.();
       __unframerWindow.removeEventListener('resize', scrollListener,);
     }
+    const dimensionCheckProcess = dimensionCheckProcesses.get(container,);
+    if (dimensionCheckProcess) {
+      cancelFrame(dimensionCheckProcess,);
+      dimensionCheckProcesses.delete(container,);
+    }
+    scrollSize.delete(container,);
   };
+}
+function canUseNativeTimeline(target,) {
+  return typeof __unframerWindow !== 'undefined' && !target && supportsScrollTimeline();
 }
 var timelineCache = /* @__PURE__ */ new Map();
 function scrollTimelineFallback(options,) {
@@ -10488,7 +10739,7 @@ function getTimeline({
   const targetCache = containerCache.get(targetKey,) ?? {};
   const axisKey = axis + (options.offset ?? []).join(',',);
   if (!targetCache[axisKey]) {
-    targetCache[axisKey] = !options.target && supportsScrollTimeline()
+    targetCache[axisKey] = canUseNativeTimeline(options.target,)
       ? new ScrollTimeline({
         source: container,
         axis,
@@ -10549,12 +10800,31 @@ var isRefPending = (ref) => {
   if (!ref) return false;
   return !ref.current;
 };
+function makeAccelerateConfig(axis, options, container,) {
+  return {
+    factory: (animation) =>
+      scroll(animation, {
+        ...options,
+        axis,
+        container,
+      },),
+    times: [0, 1,],
+    keyframes: [0, 1,],
+    ease: (v) => v,
+    duration: 1,
+  };
+}
 function useScroll({
   container,
   target,
   ...options
 } = {},) {
   const values = useConstant(createScrollMotionValues,);
+  if (!target && canUseNativeTimeline()) {
+    const resolvedContainer = container?.current || void 0;
+    values.scrollXProgress.accelerate = makeAccelerateConfig('x', options, resolvedContainer,);
+    values.scrollYProgress.accelerate = makeAccelerateConfig('y', options, resolvedContainer,);
+  }
   const scrollAnimation = useRef(null,);
   const needsStart = useRef(false,);
   const start2 = useCallback2(() => {
@@ -10668,7 +10938,27 @@ function useTransform(input, inputRangeOrTransformer, outputRangeOrMap, options,
   const transformer = typeof inputRangeOrTransformer === 'function'
     ? inputRangeOrTransformer
     : transform(inputRangeOrTransformer, outputRange, options,);
-  return Array.isArray(input,) ? useListTransform(input, transformer,) : useListTransform([input,], ([latest,],) => transformer(latest,),);
+  const result = Array.isArray(input,)
+    ? useListTransform(input, transformer,)
+    : useListTransform([input,], ([latest,],) => transformer(latest,),);
+  const inputAccelerate = !Array.isArray(input,) ? input.accelerate : void 0;
+  if (
+    inputAccelerate && !inputAccelerate.isTransformed && typeof inputRangeOrTransformer !== 'function' &&
+    Array.isArray(outputRangeOrMap,) && options?.clamp !== false
+  ) {
+    result.accelerate = {
+      ...inputAccelerate,
+      times: inputRangeOrTransformer,
+      keyframes: outputRangeOrMap,
+      isTransformed: true,
+      ...(options?.ease
+        ? {
+          ease: options.ease,
+        }
+        : {}),
+    };
+  }
+  return result;
 }
 function useListTransform(values, transformer,) {
   const latest = useConstant(() => []);
@@ -10689,7 +10979,7 @@ function useMapTransform(inputValue, inputRange, outputMap, options,) {
   }
   return output;
 }
-function useSpring(source, options = {},) {
+function useFollowValue(source, options = {},) {
   const {
     isStatic,
   } = useContext(MotionConfigContext,);
@@ -10699,9 +10989,15 @@ function useSpring(source, options = {},) {
   }
   const value = useMotionValue(getFromSource(),);
   useInsertionEffect(() => {
-    return attachSpring(value, source, options,);
+    return attachFollow(value, source, options,);
   }, [value, JSON.stringify(options,),],);
   return value;
+}
+function useSpring(source, options = {},) {
+  return useFollowValue(source, {
+    type: 'spring',
+    ...options,
+  },);
 }
 function useAnimationFrame(callback,) {
   const initialTimestamp = useRef(0,);
@@ -10954,7 +11250,7 @@ function createAnimationsFromSequence(
       const {
         delay: delay2 = 0,
         times = defaultOffset(valueKeyframesAsList,),
-        type = 'keyframes',
+        type = defaultTransition.type || 'keyframes',
         repeat,
         repeatType,
         repeatDelay = 0,
@@ -10974,6 +11270,7 @@ function createAnimationsFromSequence(
           absoluteDelta = Math.abs(delta,);
         }
         const springTransition = {
+          ...defaultTransition,
           ...remainingTransition,
         };
         if (duration !== void 0) {
@@ -11071,8 +11368,12 @@ function createAnimationsFromSequence(
       }
       const definition = animationDefinitions.get(element,);
       definition.keyframes[key7] = keyframes2;
+      const {
+        type: _type,
+        ...remainingDefaultTransition
+      } = defaultTransition;
       definition.transition[key7] = {
-        ...defaultTransition,
+        ...remainingDefaultTransition,
         duration: totalDuration,
         ease: valueEasing,
         times: valueOffset,
@@ -11182,7 +11483,22 @@ function animateSubject(subject, keyframes2, options, scope,) {
 }
 function animateSequence(sequence2, options, scope,) {
   const animations2 = [];
-  const animationDefinitions = createAnimationsFromSequence(sequence2, options, scope, {
+  const processedSequence = sequence2.map((segment) => {
+    if (Array.isArray(segment,) && typeof segment[0] === 'function') {
+      const callback = segment[0];
+      const mv = motionValue(0,);
+      mv.on('change', callback,);
+      if (segment.length === 1) {
+        return [mv, [0, 1,],];
+      } else if (segment.length === 2) {
+        return [mv, [0, 1,], segment[1],];
+      } else {
+        return [mv, segment[1], segment[2],];
+      }
+    }
+    return segment;
+  },);
+  const animationDefinitions = createAnimationsFromSequence(processedSequence, options, scope, {
     spring,
   },);
   animationDefinitions.forEach(({
@@ -11196,21 +11512,44 @@ function animateSequence(sequence2, options, scope,) {
 function isSequence(value,) {
   return Array.isArray(value,) && value.some(Array.isArray,);
 }
-function createScopedAnimate(scope,) {
-  function scopedAnimate(subjectOrSequence, optionsOrKeyframes, options,) {
+function createScopedAnimate(options = {},) {
+  const {
+    scope,
+    reduceMotion,
+  } = options;
+  function scopedAnimate(subjectOrSequence, optionsOrKeyframes, options2,) {
     let animations2 = [];
     let animationOnComplete;
     if (isSequence(subjectOrSequence,)) {
-      animations2 = animateSequence(subjectOrSequence, optionsOrKeyframes, scope,);
+      animations2 = animateSequence(
+        subjectOrSequence,
+        reduceMotion !== void 0
+          ? {
+            reduceMotion,
+            ...optionsOrKeyframes,
+          }
+          : optionsOrKeyframes,
+        scope,
+      );
     } else {
       const {
         onComplete,
         ...rest
-      } = options || {};
+      } = options2 || {};
       if (typeof onComplete === 'function') {
         animationOnComplete = onComplete;
       }
-      animations2 = animateSubject(subjectOrSequence, optionsOrKeyframes, rest, scope,);
+      animations2 = animateSubject(
+        subjectOrSequence,
+        optionsOrKeyframes,
+        reduceMotion !== void 0
+          ? {
+            reduceMotion,
+            ...rest,
+          }
+          : rest,
+        scope,
+      );
     }
     const animation = new GroupAnimationWithThen(animations2,);
     if (animationOnComplete) {
@@ -11233,7 +11572,12 @@ function useAnimate() {
     // Will be hydrated by React
     animations: [],
   }));
-  const animate22 = useConstant(() => createScopedAnimate(scope,));
+  const reduceMotion = useReducedMotionConfig() ?? void 0;
+  const animate22 = useMemo(() =>
+    createScopedAnimate({
+      scope,
+      reduceMotion,
+    },), [scope, reduceMotion,],);
   useUnmountEffect(() => {
     scope.animations.forEach((animation) => animation.stop());
     scope.animations.length = 0;
@@ -11554,6 +11898,30 @@ function usePageInView() {
     };
   }, [],);
   return isInView;
+}
+function transformViewBoxPoint(svgRef,) {
+  return (point2) => {
+    const svg = svgRef.current;
+    if (!svg) {
+      return point2;
+    }
+    const viewBox = svg.viewBox?.baseVal;
+    if (!viewBox || viewBox.width === 0 && viewBox.height === 0) {
+      return point2;
+    }
+    const bbox = svg.getBoundingClientRect();
+    if (bbox.width === 0 || bbox.height === 0) {
+      return point2;
+    }
+    const scaleX2 = viewBox.width / bbox.width;
+    const scaleY2 = viewBox.height / bbox.height;
+    const svgX = bbox.left + __unframerWindow.scrollX;
+    const svgY = bbox.top + __unframerWindow.scrollY;
+    return {
+      x: (point2.x - svgX) * scaleX2 + svgX,
+      y: (point2.y - svgY) * scaleY2 + svgY,
+    };
+  };
 }
 var appearAnimationStore = /* @__PURE__ */ new Map();
 var appearComplete = /* @__PURE__ */ new Map();
@@ -11887,7 +12255,8 @@ function resetAutoScrollState() {
 function isScrollableElement(element, axis,) {
   const style2 = getComputedStyle(element,);
   const overflow = axis === 'x' ? style2.overflowX : style2.overflowY;
-  return overflowStyles2.has(overflow,);
+  const isDocumentScroll = element === document.body || element === document.documentElement;
+  return overflowStyles2.has(overflow,) || isDocumentScroll;
 }
 function findScrollableAncestor(element, axis,) {
   let current2 = element?.parentElement;
@@ -11901,8 +12270,8 @@ function findScrollableAncestor(element, axis,) {
 }
 function getScrollAmount(pointerPosition, scrollElement, axis,) {
   const rect = scrollElement.getBoundingClientRect();
-  const start2 = axis === 'x' ? rect.left : rect.top;
-  const end = axis === 'x' ? rect.right : rect.bottom;
+  const start2 = axis === 'x' ? Math.max(0, rect.left,) : Math.max(0, rect.top,);
+  const end = axis === 'x' ? Math.min(__unframerWindow.innerWidth, rect.right,) : Math.min(__unframerWindow.innerHeight, rect.bottom,);
   const distanceFromStart = pointerPosition - start2;
   const distanceFromEnd = end - pointerPosition;
   if (distanceFromStart < threshold) {
@@ -11939,24 +12308,41 @@ function autoScrollIfNeeded(groupElement, pointerPosition, axis, velocity,) {
     return;
   }
   const currentActiveEdge = activeScrollEdge.get(scrollableAncestor,);
+  const isDocumentScroll = scrollableAncestor === document.body || scrollableAncestor === document.documentElement;
   if (currentActiveEdge !== edge) {
     const shouldStart = edge === 'start' && velocity < 0 || edge === 'end' && velocity > 0;
     if (!shouldStart) return;
     activeScrollEdge.set(scrollableAncestor, edge,);
     const maxScroll = axis === 'x'
-      ? scrollableAncestor.scrollWidth - scrollableAncestor.clientWidth
-      : scrollableAncestor.scrollHeight - scrollableAncestor.clientHeight;
+      ? scrollableAncestor.scrollWidth - (isDocumentScroll ? __unframerWindow.innerWidth : scrollableAncestor.clientWidth)
+      : scrollableAncestor.scrollHeight - (isDocumentScroll ? __unframerWindow.innerHeight : scrollableAncestor.clientHeight);
     initialScrollLimits.set(scrollableAncestor, maxScroll,);
   }
   if (scrollAmount > 0) {
     const initialLimit = initialScrollLimits.get(scrollableAncestor,);
-    const currentScroll = axis === 'x' ? scrollableAncestor.scrollLeft : scrollableAncestor.scrollTop;
+    const currentScroll = axis === 'x'
+      ? isDocumentScroll ? __unframerWindow.scrollX : scrollableAncestor.scrollLeft
+      : isDocumentScroll
+      ? __unframerWindow.scrollY
+      : scrollableAncestor.scrollTop;
     if (currentScroll >= initialLimit) return;
   }
   if (axis === 'x') {
-    scrollableAncestor.scrollLeft += scrollAmount;
+    if (isDocumentScroll) {
+      __unframerWindow.scrollBy({
+        left: scrollAmount,
+      },);
+    } else {
+      scrollableAncestor.scrollLeft += scrollAmount;
+    }
   } else {
-    scrollableAncestor.scrollTop += scrollAmount;
+    if (isDocumentScroll) {
+      __unframerWindow.scrollBy({
+        top: scrollAmount,
+      },);
+    } else {
+      scrollableAncestor.scrollTop += scrollAmount;
+    }
   }
 }
 function useDefaultMotionValue(value, defaultValue = 0,) {
@@ -12021,7 +12407,7 @@ function ReorderItemComponent({
 }
 var ReorderItem = /* @__PURE__ */ forwardRef(ReorderItemComponent,);
 
-// /:https://app.framerstatic.com/framer.AFJGHHJZ.mjs
+// /:https://app.framerstatic.com/framer.EHXVWJCS.mjs
 
 import React42 from 'react';
 import { startTransition as startTransition2, } from 'react';
@@ -12971,9 +13357,6 @@ function isNumber2(value,) {
 function isArray(value,) {
   return Array.isArray(value,);
 }
-function isReadonlyArray(value,) {
-  return Array.isArray(value,);
-}
 function isObject2(value,) {
   return value !== null && typeof value === 'object' && !isArray(value,);
 }
@@ -13002,7 +13385,7 @@ function isPromiseLike(value,) {
 function isPromise(value,) {
   return value instanceof Promise;
 }
-var noop2 = () => {};
+var noop22 = () => {};
 var isWindow = typeof __unframerWindow2 !== 'undefined';
 var isBot =
   /* @__PURE__ */ (() =>
@@ -13051,7 +13434,7 @@ function initLazyModulesCache() {
       console.warn(`Failed to import lazy module: ${url}`, error,);
       throw error;
     },);
-    promise.catch(noop2,);
+    promise.catch(noop22,);
     lazyModulesCache.set(hash2, promise,);
   }
 }
@@ -13590,6 +13973,28 @@ var is_identifier = /^[a-zA-Z_$][a-zA-Z_$0-9]*$/;
 function stringify_key(key7,) {
   return is_identifier.test(key7,) ? '.' + key7 : '[' + JSON.stringify(key7,) + ']';
 }
+function is_valid_array_index(s,) {
+  if (s.length === 0) return false;
+  if (s.length > 1 && s.charCodeAt(0,) === 48) return false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i,);
+    if (c < 48 || c > 57) return false;
+  }
+  const n = +s;
+  if (n >= 2 ** 32 - 1) return false;
+  if (n < 0) return false;
+  return true;
+}
+function valid_array_indices(array,) {
+  const keys3 = Object.keys(array,);
+  for (var i = keys3.length - 1; i >= 0; i--) {
+    if (is_valid_array_index(keys3[i],)) {
+      break;
+    }
+  }
+  keys3.length = i + 1;
+  return keys3;
+}
 function encode64(arraybuffer,) {
   const dv = new DataView(arraybuffer,);
   let binaryString = '';
@@ -13666,6 +14071,7 @@ var NAN = -3;
 var POSITIVE_INFINITY = -4;
 var NEGATIVE_INFINITY = -5;
 var NEGATIVE_ZERO = -6;
+var SPARSE = -7;
 function parse(serialized, revivers,) {
   return unflatten(JSON.parse(serialized,), revivers,);
 }
@@ -13797,6 +14203,14 @@ function unflatten(parsed, revivers,) {
           default:
             throw new Error(`Unknown type ${type}`,);
         }
+      } else if (value[0] === SPARSE) {
+        const len = value[1];
+        const array = new Array(len,);
+        hydrated[index] = array;
+        for (let i = 2; i < value.length; i += 2) {
+          const idx = value[i];
+          array[idx] = hydrate(value[i + 1],);
+        }
       } else {
         const array = new Array(value.length,);
         hydrated[index] = array;
@@ -13809,7 +14223,7 @@ function unflatten(parsed, revivers,) {
     } else {
       const object = {};
       hydrated[index] = object;
-      for (const key7 in value) {
+      for (const key7 of Object.keys(value,)) {
         if (key7 === '__proto__') {
           throw new Error('Cannot parse an object with a `__proto__` property',);
         }
@@ -13890,20 +14304,44 @@ function stringify(value, reducers,) {
           } = thing;
           str = flags ? `["RegExp",${stringify_string(source,)},"${flags}"]` : `["RegExp",${stringify_string(source,)}]`;
           break;
-        case 'Array':
+        case 'Array': {
+          let mostly_dense = false;
           str = '[';
           for (let i = 0; i < thing.length; i += 1) {
             if (i > 0) str += ',';
-            if (i in thing) {
+            if (Object.hasOwn(thing, i,)) {
               keys3.push(`[${i}]`,);
               str += flatten(thing[i],);
               keys3.pop();
-            } else {
+            } else if (mostly_dense) {
               str += HOLE;
+            } else {
+              const populated_keys = valid_array_indices(
+                /** @type {any[]} */
+                thing,
+              );
+              const population = populated_keys.length;
+              const d = String(thing.length,).length;
+              const hole_cost = (thing.length - population) * 3;
+              const sparse_cost = 4 + d + population * (d + 1);
+              if (hole_cost > sparse_cost) {
+                str = '[' + SPARSE + ',' + thing.length;
+                for (let j = 0; j < populated_keys.length; j++) {
+                  const key7 = populated_keys[j];
+                  keys3.push(`[${key7}]`,);
+                  str += ',' + key7 + ',' + flatten(thing[key7],);
+                  keys3.pop();
+                }
+                break;
+              } else {
+                mostly_dense = true;
+                str += HOLE;
+              }
             }
           }
           str += ']';
           break;
+        }
         case 'Set':
           str = '["Set"';
           for (const value2 of thing) {
@@ -13967,7 +14405,10 @@ function stringify(value, reducers,) {
           }
           if (Object.getPrototypeOf(thing,) === null) {
             str = '["null"';
-            for (const key7 in thing) {
+            for (const key7 of Object.keys(thing,)) {
+              if (key7 === '__proto__') {
+                throw new DevalueError(`Cannot stringify objects with __proto__ keys`, keys3, thing, value,);
+              }
               keys3.push(stringify_key(key7,),);
               str += `,${stringify_string(key7,)},${flatten(thing[key7],)}`;
               keys3.pop();
@@ -13976,7 +14417,10 @@ function stringify(value, reducers,) {
           } else {
             str = '{';
             let started = false;
-            for (const key7 in thing) {
+            for (const key7 of Object.keys(thing,)) {
+              if (key7 === '__proto__') {
+                throw new DevalueError(`Cannot stringify objects with __proto__ keys`, keys3, thing, value,);
+              }
               if (started) str += ',';
               started = true;
               keys3.push(stringify_key(key7,),);
@@ -14399,9 +14843,9 @@ function schedulerYield(options,) {
     },);
   }
   if (canUseYield) {
-    return safeWindow.scheduler.yield(options,).catch(noop2,);
+    return safeWindow.scheduler.yield(options,).catch(noop22,);
   }
-  return safeWindow.scheduler.postTask(() => {}, options,).catch(noop2,);
+  return safeWindow.scheduler.postTask(() => {}, options,).catch(noop22,);
 }
 function yieldToMain(options,) {
   const {
@@ -14813,39 +15257,39 @@ var cssVariable = (name) => `--view-transition-${name}`;
 function parseUnit(value,) {
   return [parseFloat(value,), value.endsWith('px',) ? 'px' : '%',];
 }
-function calcMaskPosition(mask,) {
+function calcMaskPosition(mask2,) {
   const {
     innerWidth,
     innerHeight,
   } = __unframerWindow2;
-  const [x, xUnit,] = parseUnit(mask.x,);
-  const [y, yUnit,] = parseUnit(mask.y,);
+  const [x, xUnit,] = parseUnit(mask2.x,);
+  const [y, yUnit,] = parseUnit(mask2.y,);
   return {
     x: xUnit === 'px' ? x : innerWidth * (x / 100),
     y: yUnit === 'px' ? y : innerHeight * (y / 100),
   };
 }
 var conic = {
-  makeKeyframe: (mask, progress2, page,) => {
+  makeKeyframe: (mask2, progress2, page,) => {
     let percentage = 0;
     if (
-      page === 'exit' && mask.angularDirection === 'clockwise' && progress2 === 'start' ||
-      page === 'exit' && mask.angularDirection === 'counter-clockwise' && progress2 === 'end' ||
-      page === 'enter' && mask.angularDirection === 'counter-clockwise' && progress2 === 'start' ||
-      page === 'enter' && mask.angularDirection === 'clockwise' && progress2 === 'end'
+      page === 'exit' && mask2.angularDirection === 'clockwise' && progress2 === 'start' ||
+      page === 'exit' && mask2.angularDirection === 'counter-clockwise' && progress2 === 'end' ||
+      page === 'enter' && mask2.angularDirection === 'counter-clockwise' && progress2 === 'start' ||
+      page === 'enter' && mask2.angularDirection === 'clockwise' && progress2 === 'end'
     ) {
-      percentage = mask.sweepAngle / 360 * 100;
+      percentage = mask2.sweepAngle / 360 * 100;
     }
     return `${cssVariable('conic-offset',)}: ${percentage}%;`;
   },
-  makeStyles: (mask, page,) => {
+  makeStyles: (mask2, page,) => {
     const offsetToken = `var(${cssVariable('conic-offset',)})`;
-    const isTransparentToBlack = page === 'exit' && mask.angularDirection === 'clockwise' ||
-      page === 'enter' && mask.angularDirection === 'counter-clockwise';
+    const isTransparentToBlack = page === 'exit' && mask2.angularDirection === 'clockwise' ||
+      page === 'enter' && mask2.angularDirection === 'counter-clockwise';
     const firstColor = isTransparentToBlack ? 'transparent' : 'black';
     const secondColor = isTransparentToBlack ? 'black' : 'transparent';
     let gradient = `conic-gradient(from `;
-    gradient += `${mask.angle}deg at ${mask.x} ${mask.y}, `;
+    gradient += `${mask2.angle}deg at ${mask2.x} ${mask2.y}, `;
     gradient += `${firstColor} 0%, ${firstColor} ${offsetToken}, `;
     gradient += `${secondColor} ${offsetToken}, ${secondColor} 100%)`;
     return `mask-image: ${gradient}; -webkit-mask-image: ${gradient};`;
@@ -14859,11 +15303,11 @@ var conic = {
     `,
 };
 var circle = {
-  makeKeyframe: (mask, progress2,) => {
+  makeKeyframe: (mask2, progress2,) => {
     const {
       x,
       y,
-    } = calcMaskPosition(mask,);
+    } = calcMaskPosition(mask2,);
     if (progress2 === 'start') {
       return `clip-path: circle(0 at ${x}px ${y}px);`;
     } else {
@@ -14873,35 +15317,35 @@ var circle = {
   },
 };
 var inset = {
-  makeKeyframe: (mask, progress2,) => {
+  makeKeyframe: (mask2, progress2,) => {
     const {
       x,
       y,
-    } = calcMaskPosition(mask,);
+    } = calcMaskPosition(mask2,);
     const bottom = __unframerWindow2.innerHeight - y;
     const right = __unframerWindow2.innerWidth - x;
     return progress2 === 'start'
-      ? `clip-path: inset(${y}px ${right}px ${bottom}px ${x}px round ${mask.round}px);`
+      ? `clip-path: inset(${y}px ${right}px ${bottom}px ${x}px round ${mask2.round}px);`
       : `clip-path: inset(0 round 0);`;
   },
 };
 var blinds = {
-  makeKeyframe: (mask, progress2, page,) => {
-    const [, unit,] = parseUnit(mask.width,);
+  makeKeyframe: (mask2, progress2, page,) => {
+    const [, unit,] = parseUnit(mask2.width,);
     let width = `0${unit}`;
     if (progress2 === 'start' && page === 'exit' || progress2 === 'end' && page === 'enter') {
-      width = mask.width;
+      width = mask2.width;
     }
     return `${cssVariable('blinds-width',)}: ${width};`;
   },
-  makeStyles: (mask, page,) => {
+  makeStyles: (mask2, page,) => {
     const widthToken = `var(${cssVariable('blinds-width',)})`;
     const firstColor = page === 'exit' ? 'transparent' : 'black';
     const secondColor = page === 'exit' ? 'black' : 'transparent';
     let gradient = `repeating-linear-gradient(`;
-    gradient += mask.angle + 90 + 'deg, ';
+    gradient += mask2.angle + 90 + 'deg, ';
     gradient += `${firstColor} 0px, ${firstColor} ${widthToken}, `;
-    gradient += `${secondColor} ${widthToken}, ${secondColor} ${mask.width})`;
+    gradient += `${secondColor} ${widthToken}, ${secondColor} ${mask2.width})`;
     return `mask-image: ${gradient}; -webkit-mask-image: ${gradient};`;
   },
   makePropertyRules: () => {
@@ -14919,14 +15363,14 @@ var wipe = {
     const offset = progress2 === 'start' && page === 'exit' || progress2 === 'end' && page === 'enter' ? 1 : 0;
     return `${cssVariable('wipe-offset',)}: ${offset};`;
   },
-  makeStyles: (mask, page,) => {
+  makeStyles: (mask2, page,) => {
     const offsetToken = `var(${cssVariable('wipe-offset',)})`;
     const firstColor = page === 'exit' ? 'transparent' : 'black';
     const secondColor = page === 'exit' ? 'black' : 'transparent';
     let gradient = `linear-gradient(`;
-    gradient += mask.angle + 90 + 'deg, ';
-    gradient += `${firstColor} calc(calc(0% - ${mask.width}) + calc(calc(100% + ${mask.width}) * ${offsetToken})), `;
-    gradient += `${secondColor} calc(calc(100% + ${mask.width}) * ${offsetToken}))`;
+    gradient += mask2.angle + 90 + 'deg, ';
+    gradient += `${firstColor} calc(calc(0% - ${mask2.width}) + calc(calc(100% + ${mask2.width}) * ${offsetToken})), `;
+    gradient += `${secondColor} calc(calc(100% + ${mask2.width}) * ${offsetToken}))`;
     return `mask-image: ${gradient}; -webkit-mask-image: ${gradient};`;
   },
   makePropertyRules: () => {
@@ -15314,6 +15758,9 @@ function isHistoryState(data2,) {
 }
 function replaceHistoryState(data2, url, ignoreReplaceStateWrapper = false,) {
   performance.mark('framer-history-replace',);
+  if (url) {
+    updateCanonicalURL(url, __unframerWindow2.location.href,);
+  }
   const replaceState = ignoreReplaceStateWrapper
     ? __unframerWindow2.history.__proto__.replaceState
     : __unframerWindow2.history.replaceState;
@@ -15844,7 +16291,20 @@ function URLSearchParamsProvider({
     const url = new URL(__unframerWindow2.location.href,);
     const newSearchString = replacer(url.searchParams,).toString();
     url.search = newSearchString;
-    replaceHistoryState(currentHistoryState, url.toString(),);
+    const originalSearch = currentHistoryState?.queryParamBackAnchorSearch;
+    const currentSearch = __unframerWindow2.location.search.slice(1,);
+    const isFirstFilterChange = originalSearch === void 0 && newSearchString !== currentSearch;
+    const filtersCleared = originalSearch !== void 0 && newSearchString === originalSearch;
+    const nextHistoryState = {
+      ...currentHistoryState,
+      queryParamBackAnchorSearch: filtersCleared ? void 0 : originalSearch ?? (isFirstFilterChange ? currentSearch : void 0),
+    };
+    const urlString = url.toString();
+    if (isFirstFilterChange || filtersCleared) {
+      await pushHistoryState(nextHistoryState, urlString,);
+    } else {
+      replaceHistoryState(nextHistoryState, urlString,);
+    }
     startTransition2(() => {
       setUrlSearchString(newSearchString,);
     },);
@@ -20185,7 +20645,7 @@ function LayoutIdProvider({
     byLayoutId: {},
   },);
   const usedIds = useRef(/* @__PURE__ */ new Set(),).current;
-  const getLayoutId2 = useCallback2(({
+  const getLayoutId = useCallback2(({
     id: id3,
     name,
     duplicatedFrom,
@@ -20331,7 +20791,7 @@ function LayoutIdProvider({
     usedIds.clear();
   }, [],);
   const contextValue = useRef({
-    getLayoutId: getLayoutId2,
+    getLayoutId,
     persistLayoutIdCache,
     top: true,
     enabled: true,
@@ -25471,7 +25931,7 @@ function convertPropsToDeviceOptions(props, {
   };
 }
 function makeScreenMaskImage({
-  mask,
+  mask: mask2,
   width,
   height,
   rotate: rotate2 = false,
@@ -25482,7 +25942,7 @@ function makeScreenMaskImage({
     `transform="translate(0 ${width}) rotate(-90)"`
     : '';
   return encodeSVGForCSS(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewport="0 0 ${width} ${height}" preserveAspectRatio="none"><g x="0" y="0" ${transform2}>${mask}</g></svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewport="0 0 ${width} ${height}" preserveAspectRatio="none"><g x="0" y="0" ${transform2}>${mask2}</g></svg>`,
   );
 }
 var lightColors = /* @__PURE__ */ new Set(['white', 'silver', 'clearly-white', 'sorta-sage',],);
@@ -25962,6 +26422,7 @@ function StaticImage({
     // eslint-disable-next-line framer-studio/require-async-decoding -- we conditionally apply it
     /* @__PURE__ */
     jsx('img', {
+      suppressHydrationWarning: true,
       ref: onImageMount,
       decoding,
       fetchPriority: image.fetchPriority,
@@ -26299,7 +26760,7 @@ function useLayoutId2(props, {
     drag: drag2,
   } = props;
   const {
-    getLayoutId: getLayoutId2,
+    getLayoutId,
     enabled,
   } = useContext(LayoutIdContext,);
   return useMemo(() => {
@@ -26308,7 +26769,7 @@ function useLayoutId2(props, {
     if (!existingLayoutId) {
       if (drag2 || !layoutIdKey || __fromCodeComponentNode) return void 0;
     }
-    const layoutIdCandidate = existingLayoutId || getLayoutId2({
+    const layoutIdCandidate = existingLayoutId || getLayoutId({
       id: layoutIdKey,
       name,
       duplicatedFrom,
@@ -27603,7 +28064,7 @@ function _useSharedIntersectionObserver(ref, callback, options,) {
     return observeElement(observers2, key7, element, root, callback, rootMargin, threshold2,);
   }, [enabled, callback, root, rootMargin, threshold2,],);
 }
-var useSharedIntersectionObserver = typeof IntersectionObserver === 'undefined' ? noop2 : _useSharedIntersectionObserver;
+var useSharedIntersectionObserver = typeof IntersectionObserver === 'undefined' ? noop22 : _useSharedIntersectionObserver;
 var thresholds2 = /* @__PURE__ */ new Array(100,).fill(void 0,).map((_, i,) => i * 0.01);
 var ViewportContext = /* @__PURE__ */ React42.createContext(null,);
 function useAppearEffect(ref, appearCallback, options,) {
@@ -34314,6 +34775,7 @@ function createRefFunction(state,) {
 }
 var SSRParentVariantsContext = /* @__PURE__ */ React42.createContext(void 0,);
 var SSRVariantClassName = 'ssr-variant';
+var SSRVariantGroupSeparatorClassName = 'ssr-variant-group-separator';
 function renderBranchedChildrenFromPropertyOverrides(
   overrides,
   children,
@@ -34391,6 +34853,7 @@ function renderBranchedChildrenFromPropertyOverrides(
       assert(branches.length > 1, 'Must branch out when there are hiddenClassNames',);
       element = /* @__PURE__ */ jsx('div', {
         className: `${SSRVariantClassName} ${hiddenClassNames.join(' ',)}`,
+        suppressHydrationWarning: true,
         children: element,
       }, key7,);
     } else {
@@ -34399,6 +34862,14 @@ function renderBranchedChildrenFromPropertyOverrides(
     renderedBranches.push(element,);
   }
   assert(!activeVariantId || renderedBranches.length === 1, 'Must render exactly one branch when activeVariantId is given',);
+  if (!activeVariantId) {
+    return [
+      ...renderedBranches,
+      /* @__PURE__ */ jsx('div', {
+        className: SSRVariantGroupSeparatorClassName,
+      }, 'property-overrides-separator',),
+    ];
+  }
   return renderedBranches;
 }
 var SSRVariants = /* @__PURE__ */ React42.forwardRef(function SSRVariants2({
@@ -39115,14 +39586,14 @@ var TriggerState = class {
     this.onTriggerListeners.delete(listener,);
   }
   subscribe(triggerId, targetId, trigger, callback,) {
-    if (isEmptyTrigger(trigger,)) return noop2;
+    if (isEmptyTrigger(trigger,)) return noop22;
     const triggerEntry = this.triggers.get(triggerId,) ?? {
       status: 'pending',
       targetId,
       trigger,
       unsubscribeHandlers: /* @__PURE__ */ new Set(),
     };
-    if (triggerEntry.status === 'triggered') return noop2;
+    if (triggerEntry.status === 'triggered') return noop22;
     triggerEntry.callback = callback;
     triggerEntry.status = 'pending';
     this.triggers.set(triggerId, triggerEntry,);
@@ -39433,12 +39904,16 @@ function TriggerStateProvider({
     getInitialState: () => ({
       visitedPages: visitedPagesRef.current ?? /* @__PURE__ */ new Set(),
       getCurrentRoutePath: () =>
-        resolveRoutePath(routerAPIRef.current, routerAPIRef.current.currentRouteId, routerAPIRef.current.currentPathVariables,),
-      resolveRoute: (linkToWebPage) => resolveRoutePath(routerAPIRef.current, linkToWebPage.webPageId, linkToWebPage.pathVariables,),
+        routerAPIRef.current
+          ? resolveRoutePath(routerAPIRef.current, routerAPIRef.current.currentRouteId, routerAPIRef.current.currentPathVariables,)
+          : '',
+      resolveRoute: (linkToWebPage) =>
+        routerAPIRef.current ? resolveRoutePath(routerAPIRef.current, linkToWebPage.webPageId, linkToWebPage.pathVariables,) : '',
       setRouteChangeHandler: (handler) => {
         routeChangeHandlerRef.current = handler;
       },
       sendTrackingEvent: async (event) => {
+        if (!routerAPIRef.current) return;
         void sendTrackingEventForTriggerInvoke(routerAPIRef.current.pageviewEventData.current, event,);
       },
     }),
@@ -39878,7 +40353,7 @@ function useScheduleRenderSideEffects(dep,) {
   }, [],);
 }
 function executeBeforeUrlUpdateOnce(beforeUrlUpdate,) {
-  if (!beforeUrlUpdate) return noop2;
+  if (!beforeUrlUpdate) return noop22;
   let beforeUrlUpdateExecuted = false;
   return () => {
     if (beforeUrlUpdateExecuted) return;
@@ -39907,7 +40382,7 @@ function useNavigationTransition() {
     const navigationPromise = new Promise((resolve, reject,) => {
       resolveNavigationPromise = resolve;
       signal?.addEventListener('abort', reject,);
-    },).catch(noop2,);
+    },).catch(noop22,);
     startNativeSpinner(navigationPromise, updateURL, controller,);
     await nextRender.promise;
     if (signal?.aborted) return;
@@ -45961,7 +46436,7 @@ function TriggerSubscription({
   triggeredExternally,
 },) {
   const triggerState = useTriggerState();
-  const stableCallback = useStableCallback(callback ?? noop2,);
+  const stableCallback = useStableCallback(callback ?? noop22,);
   useEffect(() => {
     const unsubscribe = triggerState?.subscribe(triggerId, targetId, trigger, stableCallback,);
     return unsubscribe;
@@ -51023,7 +51498,7 @@ function getAssetOwnerType(asset,) {
 async function loadFontsWithOpenType(source,) {
   switch (source) {
     case 'google': {
-      const supportedFonts = await import('./framer-chunks/google-VQ4ZP4WR-C2T2J24Z.js');
+      const supportedFonts = await import('./framer-chunks/google-OH6PJH7O-YVQLVNW6.js');
       return supportedFonts.default;
     }
     case 'fontshare': {
@@ -51037,7 +51512,7 @@ async function loadFontsWithOpenType(source,) {
 async function loadFontToOpenTypeFeatures(source,) {
   switch (source) {
     case 'google': {
-      const features = await import('./framer-chunks/google-TRAPONMP-UUEFJ4ZF.js');
+      const features = await import('./framer-chunks/google-2FSYEIRJ-BBUVVSSM.js');
       return features.default;
     }
     case 'fontshare': {
@@ -51589,7 +52064,7 @@ function loadVariationAxes(source,) {
       const axes = (async () => {
         switch (source) {
           case 'google': {
-            return (await import('./framer-chunks/google-LLNWFNMY-PWPZVCX5.js')).default;
+            return (await import('./framer-chunks/google-IYRURLPW-NANSF7W2.js')).default;
           }
           case 'fontshare': {
             return (await import('./framer-chunks/fontshare-MHXFPDHS-VQYPAYVC.js')).default;
@@ -52581,9 +53056,9 @@ var Select = /* @__PURE__ */ React42.forwardRef(function Select2(props, measureR
   },);
 },);
 function serializeDefaultValue(defaultValue,) {
-  if (isReadonlyArray(defaultValue,)) return defaultValue.join('_',);
+  if (defaultValue === void 0) return '__undefined__';
   if (isNumber2(defaultValue,)) return String(defaultValue,);
-  if (!defaultValue) return '';
+  if (defaultValue === '') return '__empty__';
   return defaultValue;
 }
 var selectWrapperClassName = 'framer-form-select-wrapper';
@@ -56962,7 +57437,7 @@ var package_default = {
     watch: 'jest --watch',
   },
   dependencies: {
-    devalue: '^5.6.2',
+    devalue: '^5.6.3',
     eventemitter3: '^5.0.1',
     fontfaceobserver: '2.2.0',
     'hoist-non-react-statics': '^3.3.2',
@@ -56988,7 +57463,7 @@ var package_default = {
     chalk: '^4.1.2',
     eslint: '^8.57.1',
     'eslint-plugin-framer-studio': 'workspace:*',
-    'framer-motion': '12.27.3',
+    'framer-motion': '12.34.3',
     immutable: '^3.8.2',
     jest: '29.4.1',
     'jest-diff': '^29.3.1',
@@ -57061,6 +57536,7 @@ export {
   applyTreeDeltas,
   aspectRatio,
   AsyncMotionValueAnimation,
+  attachFollow,
   attachSpring,
   attrEffect,
   AutoBreakpointVariant,
@@ -57212,6 +57688,7 @@ export {
   FlatTree,
   Floating,
   flushKeyframeResolvers,
+  followValue,
   FontSourceNames,
   fontStore,
   forceLayerBackingWithCSSProperties,
@@ -57310,6 +57787,7 @@ export {
   isDragging,
   isEasingArray,
   isElementKeyboardAccessible,
+  isElementTextInput,
   isEmptyTrigger,
   isEqual,
   isFiniteNumber,
@@ -57482,6 +57960,7 @@ export {
   ResolveLinks,
   resolveMotionValue,
   resolvePageScope,
+  resolveTransition,
   resolveVariant,
   resolveVariantFromProps,
   reverseEasing,
@@ -57557,6 +58036,7 @@ export {
   transformTemplate,
   transformValue,
   transformValueTypes,
+  transformViewBoxPoint,
   translateAxis,
   TriggerSubscription,
   turnOffReactEventHandling,
@@ -57590,6 +58070,7 @@ export {
   useDynamicRefs,
   useElementScroll,
   useEnumQueryParam,
+  useFollowValue,
   useForceUpdate,
   useFormSelectVariableBinding,
   useGamepad,
