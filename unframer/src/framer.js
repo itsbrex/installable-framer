@@ -12021,11 +12021,11 @@ function ReorderItemComponent({
 }
 var ReorderItem = /* @__PURE__ */ forwardRef(ReorderItemComponent,);
 
-// /:https://app.framerstatic.com/framer.IZIQYQL7.mjs
+// /:https://app.framerstatic.com/framer.AFJGHHJZ.mjs
 
 import React42 from 'react';
-import { useDeferredValue, useSyncExternalStore, } from 'react';
 import { startTransition as startTransition2, } from 'react';
+import { useSyncExternalStore, } from 'react';
 import { Suspense as Suspense2, } from 'react';
 import { memo as memo2, } from 'react';
 import ReactDOM from 'react-dom';
@@ -13013,7 +13013,10 @@ var requestIdleCallback = /* @__PURE__ */ (() =>
   // eslint-disable-next-line compat/compat,framer-studio/tscompat
   supportsRequestIdleCallback ? __unframerWindow2.requestIdleCallback : setTimeout)();
 function encodeSVGForCSS(svg,) {
-  return `url('data:image/svg+xml,${svg.replaceAll('#', '%23',).replaceAll('\'', '%27',)}')`;
+  return `url('${encodeSVGForURL(svg,)}')`;
+}
+function encodeSVGForURL(svg,) {
+  return `data:image/svg+xml,${svg.replaceAll('#', '%23',).replaceAll('\'', '%27',).replaceAll('"', '%22',)}`;
 }
 function getPleaseReportMessage(message, error,) {
   const formattedError = error instanceof Error ? error.stack ?? error.message : error;
@@ -13029,6 +13032,9 @@ ${formattedError}`
       : '.'
   }`;
 }
+var noopSubscribe = () => () => {};
+var returnTrue = () => true;
+var returnFalse = () => false;
 var lazyModulesCache = /* @__PURE__ */ new Map();
 function initLazyModulesCache() {
   if (!isWindow) return;
@@ -14105,7 +14111,26 @@ function sendTrackingEvent(eventType, eventData, sendOn = 'lazy',) {
       );
       break;
     }
+    case 'published_site_trigger_invoke': {
+      const {
+        trackingId,
+      } = eventData;
+      if (trackingId) {
+        document.dispatchEvent(
+          new CustomEvent('framer:triggerinvoke', {
+            detail: {
+              trackingId,
+            },
+          },),
+        );
+      }
+      break;
+    }
   }
+}
+var validTrackingIdRegExp = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+function isValidTrackingId(trackingId,) {
+  return isString(trackingId,) && (trackingId === '' || validTrackingIdRegExp.test(trackingId,));
 }
 var HandoverDataType = {
   QueryCache: 0,
@@ -15570,7 +15595,7 @@ function useNativeLoadingSpinner() {
     },);
   }, [navigateListener,],);
 }
-var unsafeSlugCharactersRegExp = /[\s_?#[\]@!$&'*+,;:="<>%{}|\\^`/]+/gu;
+var unsafeSlugCharactersRegExp = /[\s?#[\]@!$&'*+,;:="<>%{}|\\^`/]+/gu;
 function trimDashes(str,) {
   let start2 = 0;
   let end = str.length;
@@ -15582,10 +15607,6 @@ function slugify(value,) {
   return trimDashes(value.trim().toLowerCase().replace(unsafeSlugCharactersRegExp, '-',),);
 }
 var NodeIdContext = /* @__PURE__ */ React42.createContext(null,);
-var validTrackingIdRegExp = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-function isValidTrackingId(trackingId,) {
-  return trackingId === '' || validTrackingIdRegExp.test(trackingId,);
-}
 function useTracking() {
   const router = useRouter();
   const nodeId = useContext(NodeIdContext,);
@@ -15609,6 +15630,23 @@ function sendCustomTrackingEvent(eventData, nodeId, trackingId,) {
     trackingId: trackingId || null,
   }, 'eager',);
 }
+var RenderTargetEnvironmentContext = /* @__PURE__ */ (() => {
+  const Context2 = createContext('preview',);
+  Context2.displayName = 'RenderTargetEnvironmentContext';
+  return Context2;
+})();
+function RenderTargetEnvironmentProvider({
+  children,
+  value,
+},) {
+  return /* @__PURE__ */ jsx(RenderTargetEnvironmentContext.Provider, {
+    value,
+    children,
+  },);
+}
+function useRenderTargetEnvironment() {
+  return useContext(RenderTargetEnvironmentContext,);
+}
 function useMemoOne(factory, inputs,) {
   const initial = useState(() => ({
     inputs,
@@ -15626,6 +15664,9 @@ function useMemoOne(factory, inputs,) {
     committed.current = cache2;
   }, [cache2,],);
   return cache2.result;
+}
+function useCallbackOne(callback, inputs,) {
+  return useMemoOne(() => callback, inputs,);
 }
 async function getLocalesForCurrentRoute(activeLocale, locales, currentRoute, pathVariables, collectionUtils,) {
   if (!currentRoute) return locales;
@@ -15761,7 +15802,7 @@ function useLayoutDirection() {
 var URLSearchParamsContext = /* @__PURE__ */ (() => {
   const Context2 = createContext({
     urlSearchParams: new URLSearchParams(),
-    triggerUpdate: () => {},
+    replaceSearchParams: async () => {},
   },);
   Context2.displayName = 'URLSearchParamsContext';
   return Context2;
@@ -15769,30 +15810,49 @@ var URLSearchParamsContext = /* @__PURE__ */ (() => {
 function URLSearchParamsProvider({
   children,
 },) {
-  const onStoreChangeRef = useRef(null,);
-  const searchString = useSyncExternalStore(
-    (onStoreChange) => {
-      onStoreChangeRef.current = onStoreChange;
-      const handler = () => {
-        onStoreChange();
-      };
-      __unframerWindow2.addEventListener('popstate', handler,);
-      return () => {
-        onStoreChangeRef.current = null;
-        __unframerWindow2.removeEventListener('popstate', handler,);
-      };
-    },
-    () => __unframerWindow2.location.search,
-    () => '',
-  );
-  const deferredSearchString = useDeferredValue(searchString,);
-  const triggerUpdate = useCallback2(() => {
-    onStoreChangeRef.current?.();
+  const [urlSearchString, setUrlSearchString,] = useState('',);
+  const renderTargetEnvironment = useRenderTargetEnvironment();
+  useEffect(() => {
+    if (renderTargetEnvironment === 'preview') return;
+    startTransition2(() => {
+      setUrlSearchString(__unframerWindow2.location.search,);
+    },);
+    const handlePopState = () => {
+      startTransition2(() => {
+        setUrlSearchString(__unframerWindow2.location.search,);
+      },);
+    };
+    __unframerWindow2.addEventListener('popstate', handlePopState,);
+    return () => {
+      __unframerWindow2.removeEventListener('popstate', handlePopState,);
+    };
+  }, [],);
+  const replaceSearchParams = useCallback2(async (replacer) => {
+    if (renderTargetEnvironment === 'preview') {
+      startTransition2(() => {
+        setUrlSearchString((currentSearchString) => {
+          const currentParams = new URLSearchParams(currentSearchString,);
+          return replacer(currentParams,).toString();
+        },);
+      },);
+      return;
+    }
+    await yieldToMain({
+      continueAfter: 'paint',
+    },);
+    const currentHistoryState = __unframerWindow2.history.state;
+    const url = new URL(__unframerWindow2.location.href,);
+    const newSearchString = replacer(url.searchParams,).toString();
+    url.search = newSearchString;
+    replaceHistoryState(currentHistoryState, url.toString(),);
+    startTransition2(() => {
+      setUrlSearchString(newSearchString,);
+    },);
   }, [],);
   const value = useMemoOne(() => ({
-    urlSearchParams: new URLSearchParams(deferredSearchString,),
-    triggerUpdate,
-  }), [deferredSearchString, triggerUpdate,],);
+    urlSearchParams: new URLSearchParams(urlSearchString,),
+    replaceSearchParams,
+  }), [urlSearchString, replaceSearchParams,],);
   return /* @__PURE__ */ jsx(URLSearchParamsContext.Provider, {
     value,
     children,
@@ -15804,43 +15864,38 @@ function useStringArrayQueryParam({
   const parameterNameRef = useRef(parameterName,);
   const {
     urlSearchParams,
-    triggerUpdate,
+    replaceSearchParams,
   } = useContext(URLSearchParamsContext,);
   const value = useMemo(() => {
     return urlSearchParams.getAll(parameterNameRef.current,);
   }, [urlSearchParams,],);
   const setValue = useCallback2(async (newValues) => {
     if (!isArray(newValues,)) return;
-    const currentHistoryState = __unframerWindow2.history.state;
-    const name = parameterNameRef.current;
-    const url = new URL(__unframerWindow2.location.href,);
-    const next2 = new URLSearchParams();
-    let inserted = false;
-    for (const [key7, originalValue,] of url.searchParams.entries()) {
-      if (key7 !== name) {
-        next2.append(key7, originalValue,);
-        continue;
+    await replaceSearchParams((currentSearchParams) => {
+      const name = parameterNameRef.current;
+      const next2 = new URLSearchParams();
+      let inserted = false;
+      for (const [key7, originalValue,] of currentSearchParams.entries()) {
+        if (key7 !== name) {
+          next2.append(key7, originalValue,);
+          continue;
+        }
+        if (inserted) continue;
+        inserted = true;
+        for (const newValue of newValues) {
+          if (!isString(newValue,)) continue;
+          next2.append(name, newValue,);
+        }
       }
-      if (inserted) continue;
-      inserted = true;
-      for (const newValue of newValues) {
-        if (!isString(newValue,)) continue;
-        next2.append(name, newValue,);
+      if (!inserted) {
+        for (const newValue of newValues) {
+          if (!isString(newValue,)) continue;
+          next2.append(name, newValue,);
+        }
       }
-    }
-    if (!inserted) {
-      for (const newValue of newValues) {
-        if (!isString(newValue,)) continue;
-        next2.append(name, newValue,);
-      }
-    }
-    url.search = next2.toString();
-    await yieldToMain({
-      continueAfter: 'paint',
+      return next2;
     },);
-    replaceHistoryState(currentHistoryState, url.toString(),);
-    triggerUpdate();
-  }, [triggerUpdate,],);
+  }, [replaceSearchParams,],);
   return [value, setValue,];
 }
 function useStringQueryParam({
@@ -16168,6 +16223,76 @@ function useRouteAnchor(routeId, {
     href,
   };
 }
+var replayMarker = '__f_replay';
+var replayMarkerIgnore = '__f_replay_ignore';
+function changeEvent() {
+  const event = new Event('change', {
+    bubbles: true,
+  },);
+  event[replayMarker] = 1;
+  return event;
+}
+function clickEvent() {
+  const event = new MouseEvent('click', {
+    bubbles: true,
+  },);
+  event[replayMarker] = 1;
+  return event;
+}
+function getValuePropFromElement(element,) {
+  if (element instanceof HTMLInputElement && (element.type === 'checkbox' || element.type === 'radio')) {
+    return 'checked';
+  }
+  return 'value';
+}
+function isReplayEvent(event,) {
+  return replayMarker in event && event[replayMarker] === 1;
+}
+function shouldIgnoreReplayEvent(event,) {
+  return replayMarkerIgnore in event.nativeEvent && event.nativeEvent[replayMarkerIgnore] === 1;
+}
+var isHydrationFn = () => isWindow;
+function useReplayPreHydrationInput(value,) {
+  const didReplayRef = useRef(false,);
+  const elementRef = useRef(null,);
+  const isHydration = useSyncExternalStore(noopSubscribe, returnFalse, isHydrationFn,);
+  useEffect(() => {
+    if (!isHydration) return;
+    const element = elementRef.current;
+    if (didReplayRef.current || !element) return;
+    didReplayRef.current = true;
+    const valueProp = getValuePropFromElement(element,);
+    const currentDOMValue = element[valueProp];
+    if (currentDOMValue === value) return;
+    if (element.type === 'radio' && currentDOMValue === true) {
+      element.checked = false;
+      element.dispatchEvent(clickEvent(),);
+      return;
+    }
+    if (valueProp === 'checked') {
+      const event2 = clickEvent();
+      event2[replayMarkerIgnore] = 1;
+      element.dispatchEvent(event2,);
+      element.dispatchEvent(clickEvent(),);
+      return;
+    }
+    if (element.nodeName === 'SELECT') {
+      element.dispatchEvent(changeEvent(),);
+      return;
+    }
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element,), valueProp,)?.set;
+    if (!nativeInputValueSetter) return;
+    nativeInputValueSetter.call(element, '',);
+    const event = changeEvent();
+    event[replayMarkerIgnore] = 1;
+    element.dispatchEvent(event,);
+    queueMicrotask(() => {
+      nativeInputValueSetter.call(element, currentDOMValue,);
+      element.dispatchEvent(changeEvent(),);
+    },);
+  }, [isHydration,],);
+  return elementRef;
+}
 var eventsToStop = [
   'mousedown',
   'mouseup',
@@ -16200,6 +16325,7 @@ var eventsToStop = [
 ];
 var stopFn = (event) => {
   if (!event.target?.closest?.('#main',)) return;
+  if (isReplayEvent(event,)) return;
   event.stopPropagation();
   performance.mark('framer-react-event-handling-prevented',);
 };
@@ -21433,6 +21559,28 @@ var Rect = {
       }
     }
   },
+  /** @internal */
+  closestRect: (rects, point2,) => {
+    let index = 0;
+    let rect = rects[0];
+    assert(rect, 'Rect array is empty',);
+    let distance2 = Rect.pointDistance(rect, point2,);
+    for (let candidateIndex = 1; candidateIndex < rects.length; candidateIndex += 1) {
+      const candidateRect = rects[candidateIndex];
+      assert(candidateRect,);
+      const candidateDistance = Rect.pointDistance(candidateRect, point2,);
+      if (candidateDistance < distance2) {
+        index = candidateIndex;
+        rect = candidateRect;
+        distance2 = candidateDistance;
+      }
+      if (distance2 === 0) break;
+    }
+    return {
+      rect,
+      index,
+    };
+  },
 };
 var edgesInOrder = ['top', 'right', 'bottom', 'left',];
 var constraintDefaults = {
@@ -22034,6 +22182,7 @@ var ControlType = /* @__PURE__ */ ((ControlType2) => {
   ControlType2['Slot'] = 'slot';
   ControlType2['Array'] = 'array';
   ControlType2['EventHandler'] = 'eventhandler';
+  ControlType2['ChangeHandler'] = 'changehandler';
   ControlType2['Transition'] = 'transition';
   ControlType2['BoxShadow'] = 'boxshadow';
   ControlType2['Link'] = 'link';
@@ -22551,6 +22700,7 @@ var FormInputStyleVariableNames = /* @__PURE__ */ ((FormInputStyleVariableNames2
   FormInputStyleVariableNames2['IconBackgroundImage'] = '--framer-input-icon-image';
   FormInputStyleVariableNames2['IconMaskImage'] = '--framer-input-icon-mask-image';
   FormInputStyleVariableNames2['IconColor'] = '--framer-input-icon-color';
+  FormInputStyleVariableNames2['IconContent'] = '--framer-input-icon-content';
   FormInputStyleVariableNames2['WrapperHeight'] = '--framer-input-wrapper-height';
   return FormInputStyleVariableNames2;
 })(FormInputStyleVariableNames || {},);
@@ -22696,8 +22846,16 @@ function useCustomValidity(onValid, onInvalid, onChange, onBlur, onFocus,) {
     };
   }, [handleInvalid, handleChange, handleBlur, onFocus,],);
 }
-var iconSpacing = 10;
+var rightIconSpacing = 10;
+var leftIconSpacing = 8;
 var iconSize = 16;
+var iconImageCSS = /* @__PURE__ */ (() => ({
+  backgroundRepeat: 'no-repeat',
+  backgroundSize: `${iconSize}px`,
+  maskRepeat: 'no-repeat',
+  maskSize: `${iconSize}px`,
+  backgroundColor: css2.variable(Var.IconColor,),
+}))();
 var inputIconCSSDeclaration = /* @__PURE__ */ (() => ({
   content: '',
   display: 'block',
@@ -22710,11 +22868,7 @@ var inputIconCSSDeclaration = /* @__PURE__ */ (() => ({
   padding: css2.variable(Var.Padding,),
   border: 'none',
   pointerEvents: 'none',
-  backgroundRepeat: 'no-repeat',
-  backgroundSize: `${iconSize}px`,
-  maskRepeat: 'no-repeat',
-  maskSize: `${iconSize}px`,
-  backgroundColor: css2.variable(Var.IconColor,),
+  ...iconImageCSS,
 }))();
 function createRGBVariableFallbacks(variables, fallback,) {
   return css2.variable(...variables.flatMap((variable) => [`${variable}-rgb`, variable,]), fallback,);
@@ -22730,6 +22884,9 @@ var defaultTextFillStyle = {
 var defaultImageStyle = {
   display: 'block',
 };
+function selectComponentChild(parentSelector, childSelector,) {
+  return `${parentSelector} > ${childSelector}, ${parentSelector} > .ssr-variant > ${childSelector}`;
+}
 var richTextCSSRules = /* @__PURE__ */ (() => [
   /**
    * RichTextContainer styles can get overridden by other static or inline styles collected in
@@ -23443,17 +23600,19 @@ var richTextCSSRules = /* @__PURE__ */ (() => [
             min-width: 16ch;
             vertical-align: top;
         }
-    `, /* css */
+    `,
+  // Modules can have highly specific three-class selectors in case of PropertyOverrides, so dimension styles will only work with !important
+  /* css */
   `
-        .framer-text-module[data-width="fill"] > :first-child,
-        .framer-text-module:not([data-width="fit"])[style*="aspect-ratio"] > :first-child {
-            width: 100%;
+        ${selectComponentChild('.framer-text-module[data-width="fill"]', ':first-child',)},
+        ${selectComponentChild('.framer-text-module:not([data-width="fit"])[style*="aspect-ratio"]', ':first-child',)} {
+            width: 100% !important;
         }
     `, /* css */
   `
         @supports not (aspect-ratio: 1) {
             .framer-text-module:not([data-width="fit"])[style*="aspect-ratio"] {
-                position: relative;
+                position: relative !important;
             }
         }
     `, /* css */
@@ -23468,12 +23627,12 @@ var richTextCSSRules = /* @__PURE__ */ (() => [
     `, /* css */
   `
         @supports not (aspect-ratio: 1) {
-            .framer-text-module[data-width="fill"] > :first-child,
-            .framer-text-module:not([data-width="fit"])[style*="aspect-ratio"] > :first-child {
+            ${selectComponentChild('.framer-text-module[data-width="fill"]', ':first-child',)},
+            ${selectComponentChild('.framer-text-module:not([data-width="fit"])[style*="aspect-ratio"]', ':first-child',)} {
                 position: absolute;
                 top: 0;
                 left: 0;
-                height: 100%;
+                height: 100% !important;
             }
         }
     `,
@@ -23908,6 +24067,7 @@ function getControlDefaultValue(control,) {
       case 'richtext':
       case 'pagescope':
       case 'eventhandler':
+      case 'changehandler':
       case 'segmentedenum':
       case 'responsiveimage':
       case 'componentinstance':
@@ -34283,9 +34443,6 @@ function propsForBreakpoint(variant, props, overrides,) {
     ...overrides[variant],
   };
 }
-var noopSubscribe = () => () => {};
-var returnTrue = () => true;
-var returnFalse = () => false;
 var PropertyOverridesWithoutCSS = /* @__PURE__ */ React42.forwardRef(function PropertyOverrides(props, ref,) {
   const cloneWithRefs = useCloneChildrenWithPropsAndRef(ref,);
   const ancestorCtx = React42.useContext(SSRParentVariantsContext,);
@@ -37339,6 +37496,35 @@ var Instance = /* @__PURE__ */ React42.forwardRef(function Instance2({
     },)
     : null;
 },);
+function AutoBreakpointVariant({
+  component,
+  props,
+},) {
+  const generatedComponentContext = useContext(GeneratedComponentContext,);
+  const element = createElement(component, props,);
+  if ('variant' in props && props.variant != null) {
+    return element;
+  }
+  if (!generatedComponentContext) return element;
+  const {
+    activeVariantId,
+    humanReadableVariantMap,
+  } = generatedComponentContext;
+  if (!activeVariantId || !humanReadableVariantMap) {
+    return element;
+  }
+  const overrides = {};
+  for (const [name, id3,] of Object.entries(humanReadableVariantMap,)) {
+    overrides[id3] = {
+      variant: name,
+    };
+  }
+  return /* @__PURE__ */ jsx(PropertyOverrides2, {
+    overrides,
+    breakpoint: activeVariantId,
+    children: element,
+  },);
+}
 var GracefullyDegradingErrorBoundary = class extends Component2 {
   constructor() {
     super(...arguments,);
@@ -38764,15 +38950,13 @@ var isPrioritized = () => {
   }
 };
 var isntPrioritized = () => !isPrioritized();
-var getServerSnapshot = () => false;
-var noOpSubscribe = () => () => {};
 function EditorBarLauncher({
   EditorBar,
   fast = false,
 },) {
   const libraryFeatures = useLibraryFeatures();
   const framerSiteId = useContext(FormContext,);
-  const enabled = useSyncExternalStore(noOpSubscribe, fast ? isPrioritized : isntPrioritized, getServerSnapshot,);
+  const enabled = useSyncExternalStore(noopSubscribe, fast ? isPrioritized : isntPrioritized, returnFalse,);
   const editorBarFeatures = useMemo(() => {
     const features = {};
     let key7;
@@ -38793,6 +38977,106 @@ function EditorBarLauncher({
     },),
   },);
 }
+var triggerHistoryStorageKey = 'framer:trigger-history:v1';
+var triggerHistoryStorageVersion = 1;
+var TriggerActionsStorageSymbol = /* @__PURE__ */ Symbol('TriggerStorage',);
+var TriggerActionsStorage = class {
+  constructor() {
+    __publicField(this, 'eventsToTrack', /* @__PURE__ */ new Set(),);
+    __publicField(this, 'historyEvents', /* @__PURE__ */ new Map(),);
+    __publicField(this, 'persistHistory', debounce(() => this.flushHistoryToStorage(), 250,),);
+    __publicField(this, 'onClickEvent', (event) => {
+      const detail = event.detail;
+      if (!detail?.trackingId) return;
+      this.recordHistoryEvent('click', detail.trackingId,);
+    },);
+    __publicField(this, 'onFormSubmitEvent', (event) => {
+      const detail = event.detail;
+      if (!detail?.trackingId) return;
+      this.recordHistoryEvent('form_submit', detail.trackingId,);
+    },);
+    __publicField(this, 'onStorageEvent', (event) => {
+      if (event.key !== triggerHistoryStorageKey) return;
+      const parsed = parseHistoryStorage(event.newValue,);
+      if (parsed) {
+        updateMap(this.historyEvents, parsed,);
+      }
+    },);
+    if (typeof __unframerWindow2 === 'undefined' || !__unframerWindow2.document) return;
+    this.eventsToTrack = getTriggerEventsToTrack();
+    this.initializeHistoryListeners();
+    this.loadHistoryFromStorage();
+  }
+  initializeHistoryListeners() {
+    if (typeof __unframerWindow2 === 'undefined' || !__unframerWindow2.document) return;
+    __unframerWindow2.document.addEventListener('framer:click', this.onClickEvent,);
+    __unframerWindow2.document.addEventListener('framer:formsubmit', this.onFormSubmitEvent,);
+    __unframerWindow2.addEventListener('storage', this.onStorageEvent,);
+  }
+  onTriggerInvoke(triggerTargetId,) {
+    this.recordHistoryEvent('trigger_invoke', triggerTargetId,);
+  }
+  recordHistoryEvent(eventType, id3,) {
+    if (!this.eventsToTrack.has(getKey(eventType, id3,),)) return;
+    this.historyEvents.set(getKey(eventType, id3,), Date.now(),);
+    this.persistHistory();
+  }
+  loadHistoryFromStorage() {
+    if (typeof __unframerWindow2 === 'undefined') return;
+    try {
+      const parsed = parseHistoryStorage(__unframerWindow2.localStorage.getItem(triggerHistoryStorageKey,),);
+      if (parsed) {
+        updateMap(this.historyEvents, parsed,);
+      }
+    } catch {}
+  }
+  flushHistoryToStorage() {
+    if (typeof __unframerWindow2 === 'undefined') return;
+    try {
+      __unframerWindow2.localStorage.setItem(
+        triggerHistoryStorageKey,
+        JSON.stringify({
+          version: triggerHistoryStorageVersion,
+          events: Object.fromEntries(this.historyEvents.entries(),),
+        },),
+      );
+    } catch {}
+  }
+  hasSeenEvent(eventType, id3, sinceMs,) {
+    const key7 = getKey(eventType, id3,);
+    const now2 = Date.now();
+    const seenAt = this.historyEvents.get(key7,);
+    if (seenAt === void 0) return false;
+    if (!sinceMs) return true;
+    return seenAt + sinceMs >= now2;
+  }
+};
+function parseHistoryStorage(raw,) {
+  if (!raw) return void 0;
+  try {
+    const parsed = JSON.parse(raw,);
+    if (parsed?.version !== triggerHistoryStorageVersion || !parsed.events) return void 0;
+    return new Map(Object.entries(parsed.events,),);
+  } catch {
+    return void 0;
+  }
+}
+function updateMap(map2, incoming,) {
+  for (const [key7, value,] of incoming.entries()) {
+    if ((map2.get(key7,) ?? 0) >= value) continue;
+    map2.set(key7, value,);
+  }
+}
+function getKey(eventType, id3,) {
+  return `${eventType}:${id3}`;
+}
+function getTriggerEventsToTrack() {
+  if (typeof __unframerWindow2 === 'undefined' || !__unframerWindow2.document || !(TriggerActionsStorageSymbol in __unframerWindow2)) {
+    return /* @__PURE__ */ new Set();
+  }
+  const safeWindow2 = __unframerWindow2;
+  return new Set(safeWindow2[TriggerActionsStorageSymbol],);
+}
 var cookieRegex = /^(?<key>[^=]*)=(?<value>.*)$/u;
 var TriggerState = class {
   constructor(initial,) {
@@ -38803,8 +39087,11 @@ var TriggerState = class {
     __publicField(this, 'visitedPages',);
     __publicField(this, 'maxScrollPercentage', getScrollPercentage(),);
     __publicField(this, 'onTriggerListeners', /* @__PURE__ */ new Set(),);
+    __publicField(this, 'delayTimeouts', /* @__PURE__ */ new Map(),);
     __publicField(this, 'resolveRoute',);
     __publicField(this, 'getCurrentRoutePath',);
+    __publicField(this, 'sendTrackingEvent',);
+    __publicField(this, 'storage', new TriggerActionsStorage(),);
     __publicField(this, 'onRouteChange', (currentPath) => {
       this.visitedPages.add(currentPath,);
       this.lastRouteChangeAtMs = Date.now();
@@ -38814,6 +39101,7 @@ var TriggerState = class {
     this.resolveRoute = initial.resolveRoute;
     this.getCurrentRoutePath = initial.getCurrentRoutePath;
     initial.setRouteChangeHandler(this.onRouteChange,);
+    this.sendTrackingEvent = initial.sendTrackingEvent;
   }
   get invokedTriggers() {
     return new Set(
@@ -38826,16 +39114,15 @@ var TriggerState = class {
   removeOnTriggerListener(listener,) {
     this.onTriggerListeners.delete(listener,);
   }
-  // TODO: include targetId in the trigger so we can store the invoke in local storage
   subscribe(triggerId, targetId, trigger, callback,) {
+    if (isEmptyTrigger(trigger,)) return noop2;
     const triggerEntry = this.triggers.get(triggerId,) ?? {
       status: 'pending',
       targetId,
       trigger,
-      events: /* @__PURE__ */ new Set(),
       unsubscribeHandlers: /* @__PURE__ */ new Set(),
     };
-    if (triggerEntry.status === 'triggered') return () => {};
+    if (triggerEntry.status === 'triggered') return noop2;
     triggerEntry.callback = callback;
     triggerEntry.status = 'pending';
     this.triggers.set(triggerId, triggerEntry,);
@@ -38854,6 +39141,8 @@ var TriggerState = class {
     if (triggerEntry.status === 'triggered') return;
     triggerEntry.callback = void 0;
     triggerEntry.status = 'inactive';
+    clearTimeout(this.delayTimeouts.get(triggerId,),);
+    this.delayTimeouts.delete(triggerId,);
     for (const unsubscribe of triggerEntry.unsubscribeHandlers) {
       unsubscribe();
     }
@@ -38861,17 +39150,16 @@ var TriggerState = class {
   on(event, initialize, triggerId,) {
     const triggerEntry = this.triggers.get(triggerId,);
     if (!triggerEntry || triggerEntry.status !== 'pending') return;
-    const handler = () => {
+    const handler = (eventPayload) => {
       if (triggerEntry?.status !== 'pending') return;
-      triggerEntry.events.add(event,);
-      this.evaulateAndInvoke(triggerId,);
+      this.evaulateAndInvoke(triggerId, eventPayload,);
     };
     let state = this.events.get(event,);
     if (!state) {
       state = {
         handlers: /* @__PURE__ */ new Set(),
-        cleanup: initialize(() => {
-          this.events.get(event,)?.handlers?.forEach((triggerHandler) => triggerHandler());
+        cleanup: initialize((eventPayload) => {
+          this.events.get(event,)?.handlers?.forEach((triggerHandler) => triggerHandler(eventPayload,));
         },),
       };
       this.events.set(event, state,);
@@ -38896,25 +39184,25 @@ var TriggerState = class {
       }
     }
   }
-  evaluate(triggerId,) {
+  evaluate(triggerId, eventPayload,) {
     const triggerEntry = this.triggers.get(triggerId,);
     assert(triggerEntry, 'Trigger should be available in triggers map before evaluation',);
     if (triggerEntry?.status === 'triggered') return true;
     if (!this.evaluateStaticRules(triggerEntry,)) return false;
-    const firstCondition = triggerEntry.trigger.conditions[0];
+    const firstCondition = triggerEntry.trigger.interactions[0];
     if (!firstCondition) return true;
     let operator = firstCondition.operator;
-    let result = this.evaluateCondition(firstCondition, triggerEntry,);
-    for (let i = 1; i < triggerEntry.trigger.conditions.length; i++) {
-      const condition = triggerEntry.trigger.conditions[i];
+    let result = this.evaluateCondition(firstCondition, eventPayload,);
+    for (let i = 1; i < triggerEntry.trigger.interactions.length; i++) {
+      const condition = triggerEntry.trigger.interactions[i];
       assert(condition, 'Condition should be available in conditions array',);
-      const evaluatedCondition = this.evaluateCondition(condition, triggerEntry,);
+      const evaluatedCondition = this.evaluateCondition(condition, eventPayload,);
       result = operator === 'or' ? result || evaluatedCondition : result && evaluatedCondition;
       operator = condition.operator;
     }
     return result;
   }
-  evaluateCondition(condition, triggerEntry,) {
+  evaluateCondition(condition, eventPayload,) {
     switch (condition.type) {
       case 'delay': {
         const initial = condition.delayType === 'site' ? this.initializedAtMs : this.lastRouteChangeAtMs;
@@ -38924,7 +39212,8 @@ var TriggerState = class {
         this.maxScrollPercentage = Math.max(this.maxScrollPercentage, getScrollPercentage(),);
         return this.maxScrollPercentage >= condition.scrollPercentage;
       case 'exit':
-        return triggerEntry.events.has('exit',);
+        if (eventPayload?.type !== 'exit') return false;
+        return condition.exitType === 'all' ? Boolean(eventPayload.exitType,) : eventPayload.exitType === condition.exitType;
       default:
         assertNever(condition,);
     }
@@ -38934,6 +39223,18 @@ var TriggerState = class {
     if (triggerEntry.trigger.urlParams && !this.evaluateUrlParams(triggerEntry.trigger.urlParams,)) return false;
     if (triggerEntry.trigger.pageCount && this.visitedPages.size < triggerEntry.trigger.pageCount) return false;
     if (!this.evaluateRouteRules(triggerEntry.trigger.includeRoutes, triggerEntry.trigger.excludeRoutes,)) return false;
+    if (triggerEntry.trigger.schedule && !this.evaluateScheduleRules(triggerEntry.trigger.schedule,)) return false;
+    if (triggerEntry.trigger.eventHistory && !this.evaluateEventHistoryRules(triggerEntry.trigger.eventHistory,)) {
+      return false;
+    }
+    return true;
+  }
+  evaluateEventHistoryRules(eventHistory,) {
+    if (!eventHistory.length) return true;
+    for (const rule of eventHistory) {
+      const seen = this.storage.hasSeenEvent(rule.eventType, rule.eventId, rule.withinMs,);
+      if (rule.ruleType === 'seen' ? !seen : seen) return false;
+    }
     return true;
   }
   evaluateCookies(cookies,) {
@@ -38942,6 +39243,7 @@ var TriggerState = class {
     const cookieStrings = (__unframerWindow2.document.cookie ?? '').split(';',).map((cookie) => cookie.trim()).filter(Boolean,);
     const operatorFunction = cookies.operator === 'and' ? 'every' : 'some';
     return cookies.rules[operatorFunction]((rule) => {
+      if (!rule.key) return false;
       switch (rule.type) {
         case 'set':
           return cookieStrings.find((cookie) => cookie.startsWith(`${rule.key}=`,)) !== void 0;
@@ -38960,6 +39262,7 @@ var TriggerState = class {
     const urlParams = new URLSearchParams(__unframerWindow2.location.search ?? '',);
     const operatorFunction = params.operator === 'and' ? 'every' : 'some';
     return params.rules[operatorFunction]((rule) => {
+      if (!rule.key) return false;
       switch (rule.type) {
         case 'set':
           return urlParams.has(rule.key,);
@@ -38977,19 +39280,28 @@ var TriggerState = class {
     const currentPath = this.getCurrentRoutePath();
     if (!currentPath) return false;
     for (const routeRule of excludeRoutes ?? []) {
+      if (!routeRule.route) continue;
       const targetPath = this.resolveRoute(routeRule.route,);
       const matches = routeRule.wildcard ? currentPath.startsWith(targetPath,) : currentPath === targetPath;
       if (matches) return false;
     }
     for (const routeRule of includeRoutes ?? []) {
+      if (!routeRule.route) continue;
       const targetPath = this.resolveRoute(routeRule.route,);
       const matches = routeRule.wildcard ? currentPath.startsWith(targetPath,) : currentPath === targetPath;
       if (matches) return true;
     }
     return !includeRoutes?.length;
   }
-  evaulateAndInvoke(triggerId,) {
-    if (this.evaluate(triggerId,)) {
+  evaluateScheduleRules(schedule,) {
+    if (!schedule) return true;
+    const now2 = /* @__PURE__ */ new Date();
+    if (schedule.startAt && /* @__PURE__ */ new Date(`${schedule.startAt}${schedule.startAtOffset ?? ''}`,) > now2) return false;
+    if (schedule.endAt && /* @__PURE__ */ new Date(`${schedule.endAt}${schedule.endAtOffset ?? ''}`,) < now2) return false;
+    return true;
+  }
+  evaulateAndInvoke(triggerId, eventPayload,) {
+    if (this.evaluate(triggerId, eventPayload,)) {
       this.invoke(triggerId,);
     }
   }
@@ -39004,21 +39316,33 @@ var TriggerState = class {
     }
     if (options.callCallback) {
       triggerEntry.callback?.();
+      this.trackInvoke(triggerEntry,);
     }
+  }
+  trackInvoke(triggerEntry,) {
+    this.storage.onTriggerInvoke(triggerEntry.targetId,);
+    setTimeout(() => {
+      this.sendTrackingEvent({
+        trackingId: triggerEntry.trigger.trackingId,
+        nodeId: parseTriggerTargetId(triggerEntry.targetId,).nodeId ?? null,
+      },);
+    }, 20,);
   }
   register(triggerId,) {
     const triggerEntry = this.triggers.get(triggerId,);
     if (!triggerEntry || triggerEntry.status !== 'pending') return;
-    for (const condition of triggerEntry.trigger.conditions) {
+    for (const condition of triggerEntry.trigger.interactions) {
       switch (condition.type) {
         case 'delay':
           {
             const initial = condition.delayType === 'site' ? this.initializedAtMs : this.lastRouteChangeAtMs;
-            setTimeout(() => {
-              if (this.evaluate(triggerId,)) {
-                this.invoke(triggerId,);
-              }
-            }, initial + condition.delayMs - Date.now(),);
+            clearTimeout(this.delayTimeouts.get(triggerId,),);
+            this.delayTimeouts.set(
+              triggerId,
+              setTimeout(() => {
+                this.evaulateAndInvoke(triggerId,);
+              }, initial + condition.delayMs - Date.now(),),
+            );
           }
           break;
         case 'scrollPercentage':
@@ -39036,18 +39360,32 @@ var TriggerState = class {
 function initializeExitListener(emit,) {
   if (typeof __unframerWindow2 === 'undefined') return;
   const visibilityChangeHandler = () => {
-    if (document.hidden) emit();
+    if (document.hidden) {
+      emit({
+        type: 'exit',
+        exitType: 'visibilitychange',
+      },);
+    }
   };
   __unframerWindow2.document.addEventListener('visibilitychange', visibilityChangeHandler,);
-  __unframerWindow2.document.documentElement.addEventListener('mouseleave', emit,);
+  const mouseLeaveHandler = () =>
+    emit({
+      type: 'exit',
+      exitType: 'mouseleave',
+    },);
+  __unframerWindow2.document.documentElement.addEventListener('mouseleave', mouseLeaveHandler,);
   return () => {
     __unframerWindow2.document.removeEventListener('visibilitychange', visibilityChangeHandler,);
-    __unframerWindow2.document.documentElement.removeEventListener('mouseleave', emit,);
+    __unframerWindow2.document.documentElement.removeEventListener('mouseleave', mouseLeaveHandler,);
   };
 }
 function initializeScrollPercentageListener(emit,) {
   if (typeof __unframerWindow2 === 'undefined') return;
-  const debouncedEmit = debounce(emit, 100,);
+  const debouncedEmit = debounce(() =>
+    emit({
+      type: 'scrollPercentage',
+      scrollPercentage: getScrollPercentage(),
+    },), 100,);
   __unframerWindow2.document.addEventListener('scroll', debouncedEmit,);
   return () => {
     __unframerWindow2.document.removeEventListener('scroll', debouncedEmit,);
@@ -39056,6 +39394,19 @@ function initializeScrollPercentageListener(emit,) {
 function getScrollPercentage() {
   if (typeof __unframerWindow2 === 'undefined' || !__unframerWindow2.document) return 0;
   return __unframerWindow2.scrollY / (__unframerWindow2.document.documentElement.scrollHeight - __unframerWindow2.innerHeight) * 100 || 0;
+}
+function isEmptyTrigger(trigger,) {
+  return trigger.interactions.length === 0 && !trigger.cookies?.rules.length && !trigger.urlParams?.rules.length && !trigger.pageCount &&
+    !trigger.includeRoutes?.length && !trigger.excludeRoutes?.length && !trigger.schedule?.startAt && !trigger.schedule?.endAt &&
+    // a trigger is still empty if it only has a trigger_invoke event history rule
+    !trigger.eventHistory?.some((rule) => rule.eventType !== 'trigger_invoke');
+}
+function parseTriggerTargetId(targetId,) {
+  const [nodeId, actionSuffix,] = targetId.split('-',);
+  return {
+    nodeId,
+    actionSuffix,
+  };
 }
 var TriggerStateContext = /* @__PURE__ */ (() => {
   const Context2 = createContext(void 0,);
@@ -39070,6 +39421,7 @@ function TriggerStateProvider({
   const visitedPagesRef = useRef();
   const routeChangeHandlerRef = useRef();
   const routerAPIRef = useRef(routerAPI,);
+  const triggerStateRef = useRef(null,);
   routerAPIRef.current = routerAPI;
   useEffect(() => {
     if (!currentRoutePath) return;
@@ -39086,12 +39438,27 @@ function TriggerStateProvider({
       setRouteChangeHandler: (handler) => {
         routeChangeHandlerRef.current = handler;
       },
+      sendTrackingEvent: async (event) => {
+        void sendTrackingEventForTriggerInvoke(routerAPIRef.current.pageviewEventData.current, event,);
+      },
     }),
+    triggerStateRef,
   }));
   return /* @__PURE__ */ jsx(TriggerStateContext.Provider, {
     value: initialState2,
     children,
   },);
+}
+async function sendTrackingEventForTriggerInvoke(maybePageViewEventData, event,) {
+  if (!isValidTrackingId(event.trackingId,)) return;
+  const pageViewEventData = maybePageViewEventData instanceof Promise ? await maybePageViewEventData : maybePageViewEventData;
+  if (!pageViewEventData) return;
+  sendTrackingEvent('published_site_trigger_invoke', {
+    ...pageViewEventData,
+    ...event,
+    // Don't attach a tracking ID if it's empty
+    trackingId: event.trackingId || null,
+  }, 'lazy',);
 }
 function resolveRoutePath(routerAPI, routeId, pathVariables,) {
   const route = routerAPI.getRoute(routeId,);
@@ -39100,19 +39467,21 @@ function resolveRoutePath(routerAPI, routeId, pathVariables,) {
 }
 function useTriggerState() {
   const triggerStateContext = useContext(TriggerStateContext,);
-  const triggerState = getTriggerState(triggerStateContext?.getInitialState,);
+  const triggerState = getTriggerState(triggerStateContext,);
   return triggerState;
 }
-function getTriggerState(getInitialState,) {
+function getTriggerState(triggerStateContext,) {
   if (typeof __unframerWindow2 === 'undefined' || !__unframerWindow2.document || isStaticRenderer()) return null;
-  const safeWindow2 = __unframerWindow2;
-  if ('__framerTriggers' in safeWindow2 && safeWindow2.__framerTriggers instanceof TriggerState) {
-    return safeWindow2.__framerTriggers;
+  assert(triggerStateContext, 'TriggerStateProvider is missing',);
+  const {
+    getInitialState,
+    triggerStateRef,
+  } = triggerStateContext;
+  if (triggerStateRef.current instanceof TriggerState) {
+    return triggerStateRef.current;
   }
-  assert(getInitialState, 'getInitialState should be provided or window.__framerTriggers should be already initialized',);
-  const triggerState = new TriggerState(getInitialState(),);
-  safeWindow2.__framerTriggers = triggerState;
-  return triggerState;
+  triggerStateRef.current = new TriggerState(getInitialState(),);
+  return triggerStateRef.current;
 }
 var mainTagId = 'main';
 var generatedPageDatasetKey = 'framerGeneratedPage';
@@ -40428,63 +40797,68 @@ function usePrefetch() {
   return React.useCallback((request) => fetchClient.prefetch(request,), [fetchClient,],);
 }
 MotionGlobalConfig.WillChange = WillChangeMotionValue;
-function PageRoot({
-  RootComponent,
-  isWebsite,
-  routeId,
-  framerSiteId,
-  pathVariables,
-  routes,
-  collectionUtils,
-  notFoundPage,
-  isReducedMotion = false,
-  includeDataObserver = false,
-  localeId,
-  locales,
-  preserveQueryParams,
-  EditorBar,
-  defaultPageStyle,
-  disableHistory,
-  LayoutTemplate,
-  siteCanonicalURL,
-  adaptLayoutToTextDirection,
-  loadSnippetsModule,
-  initialCollectionItemId,
-},) {
+function PageRoot(props,) {
+  const {
+    RootComponent,
+    isWebsite,
+    environment: environment2,
+    routeId,
+    framerSiteId,
+    pathVariables,
+    routes,
+    collectionUtils,
+    notFoundPage,
+    isReducedMotion = false,
+    includeDataObserver = false,
+    localeId,
+    locales,
+    preserveQueryParams,
+    EditorBar,
+    defaultPageStyle,
+    disableHistory,
+    LayoutTemplate,
+    siteCanonicalURL,
+    adaptLayoutToTextDirection,
+    loadSnippetsModule,
+    initialCollectionItemId,
+  } = props;
   React42.useEffect(() => {
     if (isWebsite) return;
     MainLoop.start();
   }, [],);
   if (isWebsite) {
-    return /* @__PURE__ */ jsx(MotionConfig, {
-      reducedMotion: isReducedMotion ? 'user' : 'never',
-      children: /* @__PURE__ */ jsx(CollectionUtilsCacheProvider, {
-        collectionUtils,
-        children: /* @__PURE__ */ jsx(FetchClientProvider, {
-          children: /* @__PURE__ */ jsx(CustomCursorHost, {
-            children: /* @__PURE__ */ jsx(FormContext.Provider, {
-              value: framerSiteId,
-              children: /* @__PURE__ */ jsx(SnippetsProvider, {
-                loadSnippetsModule,
-                children: /* @__PURE__ */ jsx(Router, {
-                  initialRoute: routeId,
-                  initialPathVariables: pathVariables,
-                  initialLocaleId: localeId,
-                  initialCollectionItemId,
-                  routes,
-                  collectionUtils,
-                  notFoundPage,
-                  locales,
-                  defaultPageStyle: defaultPageStyle ?? {
-                    minHeight: '100vh',
-                    width: 'auto',
-                  },
-                  preserveQueryParams,
-                  EditorBar,
-                  disableHistory,
-                  LayoutTemplate,
-                  siteCanonicalURL,
-                  adaptLayoutToTextDirection,
+    return /* @__PURE__ */ jsx(RenderTargetEnvironmentProvider, {
+      value: environment2 ?? 'preview',
+      children: /* @__PURE__ */ jsx(MotionConfig, {
+        reducedMotion: isReducedMotion ? 'user' : 'never',
+        children: /* @__PURE__ */ jsx(CollectionUtilsCacheProvider, {
+          collectionUtils,
+          children: /* @__PURE__ */ jsx(FetchClientProvider, {
+            children: /* @__PURE__ */ jsx(CustomCursorHost, {
+              children: /* @__PURE__ */ jsx(FormContext.Provider, {
+                value: framerSiteId,
+                children: /* @__PURE__ */ jsx(SnippetsProvider, {
+                  loadSnippetsModule,
+                  children: /* @__PURE__ */ jsx(Router, {
+                    initialRoute: routeId,
+                    initialPathVariables: pathVariables,
+                    initialLocaleId: localeId,
+                    initialCollectionItemId,
+                    routes,
+                    collectionUtils,
+                    notFoundPage,
+                    locales,
+                    defaultPageStyle: defaultPageStyle ?? {
+                      minHeight: '100vh',
+                      width: 'auto',
+                    },
+                    preserveQueryParams,
+                    EditorBar,
+                    disableHistory,
+                    LayoutTemplate,
+                    siteCanonicalURL,
+                    adaptLayoutToTextDirection,
+                  },),
                 },),
               },),
             },),
@@ -42930,310 +43304,6 @@ var RelationalIntersection = class _RelationalIntersection extends RelationalNod
     return left.intersection(right,);
   }
 };
-var ScalarEquals = class _ScalarEquals extends ScalarNode {
-  constructor(left, right,) {
-    const referencedFields = new Fields();
-    referencedFields.merge(left.referencedFields,);
-    referencedFields.merge(right.referencedFields,);
-    const referencedOuterFields = new Fields();
-    referencedOuterFields.merge(left.referencedOuterFields,);
-    referencedOuterFields.merge(right.referencedOuterFields,);
-    const isSynchronous = left.isSynchronous && right.isSynchronous;
-    super(referencedFields, referencedOuterFields, isSynchronous,);
-    this.left = left;
-    this.right = right;
-    __publicField(this, 'definition', {
-      type: 'boolean',
-      isNullable: false,
-    },);
-  }
-  getHash() {
-    return calculateHash('ScalarEquals', this.left, this.right,);
-  }
-  optimize(optimizer,) {
-    const leftCost = this.left.optimize(optimizer,);
-    const rightCost = this.right.optimize(optimizer,);
-    return Cost.max(leftCost, rightCost,);
-  }
-  getOptimized() {
-    const left = this.left.getOptimized();
-    const right = this.right.getOptimized();
-    return new _ScalarEquals(left, right,);
-  }
-  *evaluate(context, tuple,) {
-    const {
-      left,
-      right,
-    } = yield* evaluateObject({
-      left: this.left.evaluate(context, tuple,),
-      right: this.right.evaluate(context, tuple,),
-    },);
-    return {
-      type: 'boolean',
-      value: DatabaseValue.equal(left, right, collation,),
-    };
-  }
-};
-var RelationalLeftJoin = class _RelationalLeftJoin extends RelationalNode {
-  constructor(left, right, constraint,) {
-    super(left.isSynchronous && right.isSynchronous && constraint.isSynchronous,);
-    this.left = left;
-    this.right = right;
-    this.constraint = constraint;
-    __publicField(this, 'leftGroup',);
-    __publicField(this, 'rightGroup',);
-    this.leftGroup = left.getGroup();
-    this.rightGroup = right.getGroup();
-  }
-  getHash() {
-    return calculateHash('RelationalLeftJoin', this.leftGroup.id, this.rightGroup.id, this.constraint,);
-  }
-  getOutputFields() {
-    const outputFields = new Fields();
-    outputFields.merge(this.leftGroup.relational.outputFields,);
-    outputFields.merge(this.rightGroup.relational.outputFields,);
-    return outputFields;
-  }
-  canProvideOrdering() {
-    return false;
-  }
-  canProvideResolvedFields() {
-    return true;
-  }
-  getChildRequiredProps(group, required,) {
-    const resolvedFields = new Fields();
-    const outputFields = group.relational.outputFields;
-    for (const field of required.resolvedFields) {
-      if (outputFields.has(field,)) {
-        resolvedFields.add(field,);
-      }
-    }
-    for (const field of this.constraint.referencedFields) {
-      if (outputFields.has(field,)) {
-        resolvedFields.add(field,);
-      }
-    }
-    const ordering = new Ordering();
-    return new RequiredProps(ordering, resolvedFields,);
-  }
-  optimize(optimizer, required,) {
-    const leftRequired = this.getChildRequiredProps(this.leftGroup, required,);
-    const leftCost = optimizer.optimizeGroup(this.leftGroup, leftRequired,);
-    const rightRequired = this.getChildRequiredProps(this.rightGroup, required,);
-    const rightCost = optimizer.optimizeGroup(this.rightGroup, rightRequired,);
-    const constraintCost = this.constraint.optimize(optimizer,);
-    return Cost.max(Cost.max(leftCost, rightCost,), constraintCost,);
-  }
-  getOptimized(required,) {
-    const leftRequired = this.getChildRequiredProps(this.leftGroup, required,);
-    const left = this.leftGroup.getOptimized(leftRequired,);
-    const rightRequired = this.getChildRequiredProps(this.rightGroup, required,);
-    const right = this.rightGroup.getOptimized(rightRequired,);
-    const constraint = this.constraint.getOptimized();
-    return new _RelationalLeftJoin(left, right, constraint,);
-  }
-  /** Optimized path for equality constraints that runs in O(n + m) time. */
-  *evaluateScalarEquals(left, right, leftConstraint, rightConstraint, context,) {
-    const joinKeyMap = /* @__PURE__ */ new Map();
-    for (const rightTuple of right.tuples) {
-      const rightValue = yield* rightConstraint.evaluate(context, rightTuple,);
-      const key7 = JSON.stringify(rightValue?.value ?? null,);
-      const tuplesForKey = joinKeyMap.get(key7,) ?? [];
-      tuplesForKey.push(rightTuple,);
-      joinKeyMap.set(key7, tuplesForKey,);
-    }
-    const outputFields = this.getOutputFields();
-    const result = new Relation(outputFields,);
-    for (const leftTuple of left.tuples) {
-      const leftValue = yield* leftConstraint.evaluate(context, leftTuple,);
-      const key7 = JSON.stringify(leftValue?.value ?? null,);
-      const matches = joinKeyMap.get(key7,) ?? [];
-      if (matches.length === 0) {
-        result.push(leftTuple,);
-      } else {
-        for (const rightTuple of matches) {
-          const joinedTuple = new Tuple();
-          joinedTuple.merge(leftTuple,);
-          joinedTuple.merge(rightTuple,);
-          result.push(joinedTuple,);
-        }
-      }
-    }
-    return result;
-  }
-  *evaluate(context,) {
-    const {
-      left,
-      right,
-    } = yield* evaluateObject({
-      left: this.left.evaluate(context,),
-      right: this.right.evaluate(context,),
-    },);
-    if (this.constraint instanceof ScalarEquals) {
-      if (
-        this.constraint.left.referencedFields.subsetOf(this.leftGroup.relational.outputFields,) &&
-        this.constraint.right.referencedFields.subsetOf(this.rightGroup.relational.outputFields,)
-      ) {
-        return yield* this.evaluateScalarEquals(left, right, this.constraint.left, this.constraint.right, context,);
-      }
-      if (
-        this.constraint.right.referencedFields.subsetOf(this.leftGroup.relational.outputFields,) &&
-        this.constraint.left.referencedFields.subsetOf(this.rightGroup.relational.outputFields,)
-      ) {
-        return yield* this.evaluateScalarEquals(left, right, this.constraint.right, this.constraint.left, context,);
-      }
-    }
-    const outputFields = this.getOutputFields();
-    const result = new Relation(outputFields,);
-    for (const leftTuple of left.tuples) {
-      let hasMatch = false;
-      for (const rightTuple of right.tuples) {
-        const tuple = new Tuple();
-        tuple.merge(leftTuple,);
-        tuple.merge(rightTuple,);
-        const value = yield* this.constraint.evaluate(context, tuple,);
-        if (valueToBoolean(value,)) {
-          result.push(tuple,);
-          hasMatch = true;
-        }
-      }
-      if (!hasMatch) {
-        result.push(leftTuple,);
-      }
-    }
-    return result;
-  }
-};
-var RelationalRightJoin = class _RelationalRightJoin extends RelationalNode {
-  constructor(left, right, constraint,) {
-    super(left.isSynchronous && right.isSynchronous && constraint.isSynchronous,);
-    this.left = left;
-    this.right = right;
-    this.constraint = constraint;
-    __publicField(this, 'leftGroup',);
-    __publicField(this, 'rightGroup',);
-    this.leftGroup = left.getGroup();
-    this.rightGroup = right.getGroup();
-  }
-  getHash() {
-    return calculateHash('RelationalRightJoin', this.leftGroup.id, this.rightGroup.id, this.constraint,);
-  }
-  getOutputFields() {
-    const outputFields = new Fields();
-    outputFields.merge(this.leftGroup.relational.outputFields,);
-    outputFields.merge(this.rightGroup.relational.outputFields,);
-    return outputFields;
-  }
-  canProvideOrdering() {
-    return false;
-  }
-  canProvideResolvedFields() {
-    return true;
-  }
-  getChildRequiredProps(group, required,) {
-    const resolvedFields = new Fields();
-    const outputFields = group.relational.outputFields;
-    for (const field of required.resolvedFields) {
-      if (outputFields.has(field,)) {
-        resolvedFields.add(field,);
-      }
-    }
-    for (const field of this.constraint.referencedFields) {
-      if (outputFields.has(field,)) {
-        resolvedFields.add(field,);
-      }
-    }
-    const ordering = new Ordering();
-    return new RequiredProps(ordering, resolvedFields,);
-  }
-  optimize(optimizer, required,) {
-    const leftRequired = this.getChildRequiredProps(this.leftGroup, required,);
-    const leftCost = optimizer.optimizeGroup(this.leftGroup, leftRequired,);
-    const rightRequired = this.getChildRequiredProps(this.rightGroup, required,);
-    const rightCost = optimizer.optimizeGroup(this.rightGroup, rightRequired,);
-    const constraintCost = this.constraint.optimize(optimizer,);
-    return Cost.max(Cost.max(leftCost, rightCost,), constraintCost,);
-  }
-  getOptimized(required,) {
-    const leftRequired = this.getChildRequiredProps(this.leftGroup, required,);
-    const left = this.leftGroup.getOptimized(leftRequired,);
-    const rightRequired = this.getChildRequiredProps(this.rightGroup, required,);
-    const right = this.rightGroup.getOptimized(rightRequired,);
-    const constraint = this.constraint.getOptimized();
-    return new _RelationalRightJoin(left, right, constraint,);
-  }
-  /** Optimized path for equality constraints that runs in O(n + m) time. */
-  *evaluateScalarEquals(left, right, leftConstraint, rightConstraint, context,) {
-    const joinKeyMap = /* @__PURE__ */ new Map();
-    for (const leftTuple of left.tuples) {
-      const leftValue = yield* leftConstraint.evaluate(context, leftTuple,);
-      const key7 = JSON.stringify(leftValue?.value ?? null,);
-      const tuplesForKey = joinKeyMap.get(key7,) ?? [];
-      tuplesForKey.push(leftTuple,);
-      joinKeyMap.set(key7, tuplesForKey,);
-    }
-    const outputFields = this.getOutputFields();
-    const result = new Relation(outputFields,);
-    for (const rightTuple of right.tuples) {
-      const rightValue = yield* rightConstraint.evaluate(context, rightTuple,);
-      const key7 = JSON.stringify(rightValue?.value ?? null,);
-      const matches = joinKeyMap.get(key7,) ?? [];
-      if (matches.length === 0) {
-        result.push(rightTuple,);
-      } else {
-        for (const leftTuple of matches) {
-          const joinedTuple = new Tuple();
-          joinedTuple.merge(rightTuple,);
-          joinedTuple.merge(leftTuple,);
-          result.push(joinedTuple,);
-        }
-      }
-    }
-    return result;
-  }
-  *evaluate(context,) {
-    const {
-      left,
-      right,
-    } = yield* evaluateObject({
-      left: this.left.evaluate(context,),
-      right: this.right.evaluate(context,),
-    },);
-    if (this.constraint instanceof ScalarEquals) {
-      if (
-        this.constraint.left.referencedFields.subsetOf(this.leftGroup.relational.outputFields,) &&
-        this.constraint.right.referencedFields.subsetOf(this.rightGroup.relational.outputFields,)
-      ) {
-        return yield* this.evaluateScalarEquals(left, right, this.constraint.left, this.constraint.right, context,);
-      }
-      if (
-        this.constraint.right.referencedFields.subsetOf(this.leftGroup.relational.outputFields,) &&
-        this.constraint.left.referencedFields.subsetOf(this.rightGroup.relational.outputFields,)
-      ) {
-        return yield* this.evaluateScalarEquals(left, right, this.constraint.right, this.constraint.left, context,);
-      }
-    }
-    const outputFields = this.getOutputFields();
-    const result = new Relation(outputFields,);
-    for (const rightTuple of right.tuples) {
-      let hasMatch = false;
-      for (const leftTuple of left.tuples) {
-        const tuple = new Tuple();
-        tuple.merge(rightTuple,);
-        tuple.merge(leftTuple,);
-        const value = yield* this.constraint.evaluate(context, tuple,);
-        if (valueToBoolean(value,)) {
-          result.push(tuple,);
-          hasMatch = true;
-        }
-      }
-      if (!hasMatch) {
-        result.push(rightTuple,);
-      }
-    }
-    return result;
-  }
-};
 var RelationalScan = class _RelationalScan extends RelationalNode {
   constructor(collection,) {
     super(false,);
@@ -43491,6 +43561,50 @@ var ScalarEndsWith = class _ScalarEndsWith extends ScalarNode {
     return {
       type: 'boolean',
       value: DatabaseValue.endsWith(source, target, collation4,),
+    };
+  }
+};
+var ScalarEquals = class _ScalarEquals extends ScalarNode {
+  constructor(left, right,) {
+    const referencedFields = new Fields();
+    referencedFields.merge(left.referencedFields,);
+    referencedFields.merge(right.referencedFields,);
+    const referencedOuterFields = new Fields();
+    referencedOuterFields.merge(left.referencedOuterFields,);
+    referencedOuterFields.merge(right.referencedOuterFields,);
+    const isSynchronous = left.isSynchronous && right.isSynchronous;
+    super(referencedFields, referencedOuterFields, isSynchronous,);
+    this.left = left;
+    this.right = right;
+    __publicField(this, 'definition', {
+      type: 'boolean',
+      isNullable: false,
+    },);
+  }
+  getHash() {
+    return calculateHash('ScalarEquals', this.left, this.right,);
+  }
+  optimize(optimizer,) {
+    const leftCost = this.left.optimize(optimizer,);
+    const rightCost = this.right.optimize(optimizer,);
+    return Cost.max(leftCost, rightCost,);
+  }
+  getOptimized() {
+    const left = this.left.getOptimized();
+    const right = this.right.getOptimized();
+    return new _ScalarEquals(left, right,);
+  }
+  *evaluate(context, tuple,) {
+    const {
+      left,
+      right,
+    } = yield* evaluateObject({
+      left: this.left.evaluate(context, tuple,),
+      right: this.right.evaluate(context, tuple,),
+    },);
+    return {
+      type: 'boolean',
+      value: DatabaseValue.equal(left, right, collation,),
     };
   }
 };
@@ -43814,10 +43928,6 @@ var Explorer = class {
   }
   explore(before,) {
     const group = before.getGroup();
-    if (before instanceof RelationalLeftJoin) {
-      const after = new RelationalRightJoin(before.right, before.left, before.constraint,);
-      this.memo.addRelational(after, group,);
-    }
     if (before instanceof RelationalFilter) {
       if (before.predicate instanceof ScalarAnd) {
         const left = this.normalizer.newRelationalFilter(before.input, before.predicate.left,);
@@ -44032,6 +44142,136 @@ var Memo = class {
     if (existing) return existing;
     this.nodes.set(hash2, node,);
     return node;
+  }
+};
+var RelationalLeftJoin = class _RelationalLeftJoin extends RelationalNode {
+  constructor(left, right, constraint,) {
+    super(left.isSynchronous && right.isSynchronous && constraint.isSynchronous,);
+    this.left = left;
+    this.right = right;
+    this.constraint = constraint;
+    __publicField(this, 'leftGroup',);
+    __publicField(this, 'rightGroup',);
+    this.leftGroup = left.getGroup();
+    this.rightGroup = right.getGroup();
+  }
+  getHash() {
+    return calculateHash('RelationalLeftJoin', this.leftGroup.id, this.rightGroup.id, this.constraint,);
+  }
+  getOutputFields() {
+    const outputFields = new Fields();
+    outputFields.merge(this.leftGroup.relational.outputFields,);
+    outputFields.merge(this.rightGroup.relational.outputFields,);
+    return outputFields;
+  }
+  canProvideOrdering() {
+    return false;
+  }
+  canProvideResolvedFields() {
+    return true;
+  }
+  getChildRequiredProps(group, required,) {
+    const resolvedFields = new Fields();
+    const outputFields = group.relational.outputFields;
+    for (const field of required.resolvedFields) {
+      if (outputFields.has(field,)) {
+        resolvedFields.add(field,);
+      }
+    }
+    for (const field of this.constraint.referencedFields) {
+      if (outputFields.has(field,)) {
+        resolvedFields.add(field,);
+      }
+    }
+    const ordering = new Ordering();
+    return new RequiredProps(ordering, resolvedFields,);
+  }
+  optimize(optimizer, required,) {
+    const leftRequired = this.getChildRequiredProps(this.leftGroup, required,);
+    const leftCost = optimizer.optimizeGroup(this.leftGroup, leftRequired,);
+    const rightRequired = this.getChildRequiredProps(this.rightGroup, required,);
+    const rightCost = optimizer.optimizeGroup(this.rightGroup, rightRequired,);
+    const constraintCost = this.constraint.optimize(optimizer,);
+    return Cost.max(Cost.max(leftCost, rightCost,), constraintCost,);
+  }
+  getOptimized(required,) {
+    const leftRequired = this.getChildRequiredProps(this.leftGroup, required,);
+    const left = this.leftGroup.getOptimized(leftRequired,);
+    const rightRequired = this.getChildRequiredProps(this.rightGroup, required,);
+    const right = this.rightGroup.getOptimized(rightRequired,);
+    const constraint = this.constraint.getOptimized();
+    return new _RelationalLeftJoin(left, right, constraint,);
+  }
+  /** Optimized path for equality constraints that runs in O(n + m) time. */
+  *evaluateScalarEquals(left, right, leftConstraint, rightConstraint, context,) {
+    const joinKeyMap = /* @__PURE__ */ new Map();
+    for (const rightTuple of right.tuples) {
+      const rightValue = yield* rightConstraint.evaluate(context, rightTuple,);
+      const key7 = JSON.stringify(rightValue?.value ?? null,);
+      const tuplesForKey = joinKeyMap.get(key7,) ?? [];
+      tuplesForKey.push(rightTuple,);
+      joinKeyMap.set(key7, tuplesForKey,);
+    }
+    const outputFields = this.getOutputFields();
+    const result = new Relation(outputFields,);
+    for (const leftTuple of left.tuples) {
+      const leftValue = yield* leftConstraint.evaluate(context, leftTuple,);
+      const key7 = JSON.stringify(leftValue?.value ?? null,);
+      const matches = joinKeyMap.get(key7,) ?? [];
+      if (matches.length === 0) {
+        result.push(leftTuple,);
+      } else {
+        for (const rightTuple of matches) {
+          const joinedTuple = new Tuple();
+          joinedTuple.merge(leftTuple,);
+          joinedTuple.merge(rightTuple,);
+          result.push(joinedTuple,);
+        }
+      }
+    }
+    return result;
+  }
+  *evaluate(context,) {
+    const {
+      left,
+      right,
+    } = yield* evaluateObject({
+      left: this.left.evaluate(context,),
+      right: this.right.evaluate(context,),
+    },);
+    if (this.constraint instanceof ScalarEquals) {
+      if (
+        this.constraint.left.referencedFields.subsetOf(this.leftGroup.relational.outputFields,) &&
+        this.constraint.right.referencedFields.subsetOf(this.rightGroup.relational.outputFields,)
+      ) {
+        return yield* this.evaluateScalarEquals(left, right, this.constraint.left, this.constraint.right, context,);
+      }
+      if (
+        this.constraint.right.referencedFields.subsetOf(this.leftGroup.relational.outputFields,) &&
+        this.constraint.left.referencedFields.subsetOf(this.rightGroup.relational.outputFields,)
+      ) {
+        return yield* this.evaluateScalarEquals(left, right, this.constraint.right, this.constraint.left, context,);
+      }
+    }
+    const outputFields = this.getOutputFields();
+    const result = new Relation(outputFields,);
+    for (const leftTuple of left.tuples) {
+      let hasMatch = false;
+      for (const rightTuple of right.tuples) {
+        const tuple = new Tuple();
+        tuple.merge(leftTuple,);
+        tuple.merge(rightTuple,);
+        const value = yield* this.constraint.evaluate(context, tuple,);
+        if (valueToBoolean(value,)) {
+          result.push(tuple,);
+          hasMatch = true;
+        }
+      }
+      if (!hasMatch) {
+        result.push(leftTuple,);
+      }
+    }
+    return result;
   }
 };
 var RelationalLimit = class _RelationalLimit extends RelationalNode {
@@ -44619,8 +44859,8 @@ var ScalarVariable = class extends ScalarNode {
   }
 };
 var Normalizer = class {
-  constructor(memo4,) {
-    this.memo = memo4;
+  constructor(memo7,) {
+    this.memo = memo7;
   }
   finishRelational(node,) {
     return this.memo.addRelational(node,);
@@ -44651,14 +44891,6 @@ var Normalizer = class {
     ) {
       const pushedFilter = this.newRelationalFilter(input.left, predicate,);
       return this.newRelationalLeftJoin(pushedFilter, input.right, input.constraint,);
-    }
-    if (
-      input instanceof RelationalRightJoin &&
-      // Check that the predicate doesn't depend on any joined field.
-      predicate.referencedFields.subsetOf(input.rightGroup.relational.outputFields,)
-    ) {
-      const pushedFilter = this.newRelationalFilter(input.right, predicate,);
-      return this.newRelationalLeftJoin(input.left, pushedFilter, input.constraint,);
     }
     const node = new RelationalFilter(input, predicate,);
     return this.finishRelational(node,);
@@ -45513,6 +45745,8 @@ var variableBindingHooks = {
   ]: useFormSelectBooleanVariableBinding,
   ['collectionreference'/* CollectionReference */
   ]: useFormSelectCollectionVariableBinding,
+  ['enum'/* Enum */
+  ]: useFormSelectEnumVariableBinding,
 };
 function useFormSelectVariableBinding(options,) {
   const variableTypeRef = useRef(options.variableType,);
@@ -45578,24 +45812,41 @@ function useFormSelectCollectionVariableBinding({
     titleId,
   },);
   const value = isBoolean(rawValue,) ? void 0 : rawValue;
-  const selectValue = value === void 0 ? ALL_ELEMENTS_VALUE : value;
-  const selectOptionsIncludingOptional = useMemo(() => withAllOption(selectOptions, isOptional, allItemsLabel,), [
+  return useStringSelectBinding({
     allItemsLabel,
     isOptional,
     selectOptions,
-  ],);
-  const onChange = useCallback2((event) => {
-    if (!(event.target instanceof HTMLSelectElement)) return;
-    const selectedValue = event.target.value;
-    startTransition2(() => {
-      if (selectedValue === ALL_ELEMENTS_VALUE) {
-        setValue(void 0,);
-      } else {
-        setValue(selectedValue,);
-      }
-    },);
-  }, [setValue,],);
-  return [selectValue, selectOptionsIncludingOptional, onChange,];
+    setValue,
+    value,
+  },);
+}
+function useFormSelectEnumVariableBinding({
+  allItemsLabel,
+  options: enumOptions,
+  getOptionTitle,
+  isOptional,
+  setValue,
+  value: rawValue,
+},) {
+  const {
+    activeLocale,
+  } = useLocaleInfo();
+  const selectOptions = useMemo(() => {
+    if (!enumOptions) return void 0;
+    return enumOptions.map((enumId) => ({
+      type: 'option',
+      value: enumId,
+      title: getOptionTitle?.(enumId, activeLocale,) ?? '',
+    }));
+  }, [activeLocale, enumOptions, getOptionTitle,],);
+  const value = isString(rawValue,) ? rawValue : void 0;
+  return useStringSelectBinding({
+    allItemsLabel,
+    isOptional,
+    selectOptions,
+    setValue,
+    value,
+  },);
 }
 function useCollectionSelectOptions({
   collectionData,
@@ -45641,6 +45892,32 @@ function useCollectionSelectOptions({
     },);
   }, [records, titleId, slugId,],);
 }
+function useStringSelectBinding({
+  allItemsLabel,
+  isOptional,
+  selectOptions,
+  setValue,
+  value,
+},) {
+  const selectValue = value === void 0 ? ALL_ELEMENTS_VALUE : value;
+  const selectOptionsIncludingOptional = useMemo(() => withAllOption(selectOptions, isOptional, allItemsLabel,), [
+    allItemsLabel,
+    isOptional,
+    selectOptions,
+  ],);
+  const onChange = useCallback2((event) => {
+    if (!(event.target instanceof HTMLSelectElement)) return;
+    const selectedValue = event.target.value;
+    startTransition2(() => {
+      if (selectedValue === ALL_ELEMENTS_VALUE) {
+        setValue(void 0,);
+      } else {
+        setValue(selectedValue,);
+      }
+    },);
+  }, [setValue,],);
+  return [selectValue, selectOptionsIncludingOptional, onChange,];
+}
 function withAllOption(options, isOptional, allItemsLabel, includeDivider = true,) {
   if (isOptional !== true || !allItemsLabel) return options;
   const allOption = {
@@ -45656,6 +45933,26 @@ function withAllOption(options, isOptional, allItemsLabel, includeDivider = true
   }
   return [allOption, ...options,];
 }
+function createTrigger(input,) {
+  if (typeof __unframerWindow2 === 'undefined' || !__unframerWindow2.document) return input;
+  const safeWindow2 = __unframerWindow2;
+  for (const rule of input.eventHistory ?? []) {
+    if (!rule.eventId) continue;
+    safeWindow2[TriggerActionsStorageSymbol] ??= /* @__PURE__ */ new Set();
+    safeWindow2[TriggerActionsStorageSymbol].add(`${rule.eventType}:${rule.eventId}`,);
+  }
+  return input;
+}
+function useStableCallback(callback,) {
+  const ref = useRef(callback,);
+  useInsertionEffect(() => {
+    ref.current = callback;
+  }, [callback,],);
+  return useCallbackOne((...args) => {
+    const latestFn = ref.current;
+    return latestFn(...args,);
+  }, [],);
+}
 function TriggerSubscription({
   triggerId,
   targetId,
@@ -45664,7 +45961,7 @@ function TriggerSubscription({
   triggeredExternally,
 },) {
   const triggerState = useTriggerState();
-  const stableCallback = useStableCallback(callback,);
+  const stableCallback = useStableCallback(callback ?? noop2,);
   useEffect(() => {
     const unsubscribe = triggerState?.subscribe(triggerId, targetId, trigger, stableCallback,);
     return unsubscribe;
@@ -45677,11 +45974,6 @@ function TriggerSubscription({
     }
   }, [triggerState, triggerId, triggeredExternally,],);
   return null;
-}
-function useStableCallback(callback,) {
-  const latest = useRef(callback,);
-  latest.current = callback;
-  return useCallback2((...args) => latest.current?.(...args,), [],);
 }
 function useTriggers() {
   const triggerState = useTriggerState();
@@ -46392,8 +46684,8 @@ function useLoadMorePagination(totalSize, pageSize, hash2, paginateWithSuspended
       continueAfter: 'paint',
     },);
     if (currentPageRef.current >= totalPages) return;
-    const renderNextPage = (startTransition18) => {
-      startTransition18(() => {
+    const renderNextPage = (startTransition222) => {
+      startTransition222(() => {
         setCurrentPage((_currentPage) => {
           const nextPage = Math.min(_currentPage + 1, totalPages,);
           currentPageRef.current = nextPage;
@@ -48135,6 +48427,995 @@ function withMappedReactProps(Component18, info,) {
     },);
   };
 }
+var uniformPrefix = 'u_';
+var builtInUniforms = {
+  time: {
+    name: 'u_time',
+    glslType: 'float',
+  },
+  resolution: {
+    name: 'u_resolution',
+    glslType: 'vec2',
+  },
+  deltaTime: {
+    name: 'u_deltaTime',
+    glslType: 'float',
+  },
+  pixelRatio: {
+    name: 'u_pixelRatio',
+    glslType: 'float',
+  },
+};
+var webGLContextLostEvent = 'webglcontextlost';
+var WebGL2ShaderRenderer = class {
+  constructor(canvas, vertexSource, fragmentSource, resolutionScale,) {
+    __publicField(this, 'gl',);
+    __publicField(this, 'program',);
+    __publicField(this, 'vao',);
+    __publicField(this, 'buffers', [],);
+    __publicField(this, 'builtInUniformLocations',);
+    __publicField(this, 'customUniformLocations',);
+    __publicField(this, 'textures', /* @__PURE__ */ new Map(),);
+    __publicField(this, 'canvas',);
+    __publicField(this, 'contextLostHandler',);
+    __publicField(this, 'disposed', false,);
+    __publicField(this, 'pixelRatio', typeof __unframerWindow2 !== 'undefined' ? __unframerWindow2.devicePixelRatio : 1,);
+    __publicField(this, 'resolutionScale',);
+    __publicField(this, 'lastBufferWidth', 0,);
+    __publicField(this, 'lastBufferHeight', 0,);
+    this.resolutionScale = resolutionScale;
+    this.canvas = canvas;
+    const gl = canvas.getContext('webgl2', {
+      alpha: true,
+      premultipliedAlpha: false,
+      antialias: false,
+      powerPreference: 'default',
+      preserveDrawingBuffer: canvas instanceof OffscreenCanvas,
+    },);
+    if (!gl) {
+      throw new Error('WebGL2 not supported',);
+    }
+    this.gl = gl;
+    let vertexShader = null;
+    let fragmentShader = null;
+    try {
+      vertexShader = this.compileShader(gl.VERTEX_SHADER, vertexSource,);
+      fragmentShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource,);
+    } catch (error) {
+      this.cleanupShaders(vertexShader, fragmentShader,);
+      throw error;
+    }
+    let program;
+    try {
+      program = this.linkProgram(vertexShader, fragmentShader,);
+    } catch (error) {
+      this.cleanupShaders(vertexShader, fragmentShader,);
+      throw error;
+    }
+    this.cleanupShaders(vertexShader, fragmentShader,);
+    this.program = program;
+    this.vao = this.createVertexArrayObject();
+    gl.bindVertexArray(this.vao,);
+    this.setupFullScreenQuad();
+    gl.useProgram(program,);
+    this.builtInUniformLocations = {
+      [builtInUniforms.time.name]: gl.getUniformLocation(program, builtInUniforms.time.name,),
+      [builtInUniforms.resolution.name]: gl.getUniformLocation(program, builtInUniforms.resolution.name,),
+      [builtInUniforms.deltaTime.name]: gl.getUniformLocation(program, builtInUniforms.deltaTime.name,),
+      [builtInUniforms.pixelRatio.name]: gl.getUniformLocation(program, builtInUniforms.pixelRatio.name,),
+    };
+    this.customUniformLocations = /* @__PURE__ */ new Map();
+    gl.clearColor(0, 0, 0, 0,);
+    this.contextLostHandler = (event) => {
+      event.preventDefault();
+      this.dispose();
+    };
+    canvas.addEventListener(webGLContextLostEvent, this.contextLostHandler,);
+  }
+  /**
+   * Renders a frame with the given timing and optional custom uniforms.
+   */
+  render(elapsedTime, deltaTime, uniforms,) {
+    if (this.disposed) return;
+    const {
+      gl,
+    } = this;
+    gl.bindVertexArray(this.vao,);
+    this.updateBuiltInUniforms(elapsedTime, deltaTime,);
+    if (uniforms) {
+      let textureUnit = 0;
+      for (const uniformName in uniforms) {
+        const uniformValue = uniforms[uniformName];
+        if (!uniformValue) continue;
+        let location = this.customUniformLocations.get(uniformName,);
+        if (location === void 0) {
+          location = gl.getUniformLocation(this.program, uniformName,);
+          this.customUniformLocations.set(uniformName, location,);
+        }
+        if (uniformValue.type === 'sampler2D') {
+          this.bindTexture(uniformName, uniformValue.value, textureUnit,);
+          gl.uniform1i(location, textureUnit,);
+          textureUnit++;
+        } else {
+          this.setUniform(location, uniformValue,);
+        }
+      }
+    }
+    gl.clear(gl.COLOR_BUFFER_BIT,);
+    gl.drawArrays(gl.TRIANGLES, 0, 6,);
+  }
+  /**
+   * Syncs the canvas buffer and viewport to match display size, accounting for device pixel ratio.
+   */
+  resize() {
+    if (this.disposed) return;
+    const {
+      canvas,
+    } = this;
+    if (canvas instanceof OffscreenCanvas) {
+      throw new Error('resize() is not supported for OffscreenCanvas.',);
+    }
+    const rect = canvas.getBoundingClientRect();
+    const cssWidth = Math.min(rect.width, canvas.offsetWidth,);
+    const cssHeight = Math.min(rect.height, canvas.offsetHeight,);
+    const dpr = __unframerWindow2.devicePixelRatio;
+    const effectiveDpr = Math.max(dpr * this.resolutionScale, 1,);
+    this.pixelRatio = effectiveDpr;
+    const width = cssWidth * effectiveDpr;
+    const height = cssHeight * effectiveDpr;
+    if (width === this.lastBufferWidth && height === this.lastBufferHeight) return;
+    this.lastBufferWidth = width;
+    this.lastBufferHeight = height;
+    canvas.width = width;
+    canvas.height = height;
+    this.gl.viewport(0, 0, width, height,);
+  }
+  resizeOffscreenCanvas(width, height,) {
+    if (this.disposed) return;
+    this.gl.viewport(0, 0, width, height,);
+  }
+  /**
+   * Force all commands to complete execution; used for canvas fallback image generation
+   */
+  finish() {
+    if (this.disposed) return;
+    this.gl.finish();
+  }
+  /**
+   * Cleans up WebGL resources.
+   */
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.canvas.removeEventListener(webGLContextLostEvent, this.contextLostHandler,);
+    if (this.gl.isContextLost()) return;
+    const {
+      gl,
+    } = this;
+    for (const buffer of this.buffers) {
+      gl.deleteBuffer(buffer,);
+    }
+    for (const entry of this.textures.values()) {
+      gl.deleteTexture(entry.texture,);
+    }
+    gl.deleteVertexArray(this.vao,);
+    gl.deleteProgram(this.program,);
+  }
+  /**
+   * Compiles GLSL source code into a shader object the GPU can execute.
+   * @throws Error with shader info log if compilation fails
+   */
+  compileShader(type, source,) {
+    const {
+      gl,
+    } = this;
+    const shader = gl.createShader(type,);
+    if (!shader) {
+      throw new Error('Failed to create shader',);
+    }
+    gl.shaderSource(shader, source,);
+    gl.compileShader(shader,);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS,)) {
+      const info = gl.getShaderInfoLog(shader,);
+      gl.deleteShader(shader,);
+      const shaderType = type === gl.VERTEX_SHADER ? 'Vertex' : 'Fragment';
+      throw new Error(`${shaderType} shader compilation failed: ${info}`,);
+    }
+    return shader;
+  }
+  /**
+   * Marks shaders as objects to be garbage collected when not in use.
+   */
+  cleanupShaders(...shaders) {
+    const {
+      gl,
+    } = this;
+    for (const shader of shaders) {
+      if (!shader) continue;
+      gl.deleteShader(shader,);
+    }
+  }
+  /**
+   * Links compiled vertex and fragment shaders into a complete shader program.
+   * @throws Error with program info log if linking fails
+   */
+  linkProgram(vertexShader, fragmentShader,) {
+    const {
+      gl,
+    } = this;
+    const program = gl.createProgram();
+    if (!program) {
+      throw new Error('Failed to create program',);
+    }
+    gl.attachShader(program, vertexShader,);
+    gl.attachShader(program, fragmentShader,);
+    gl.linkProgram(program,);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS,)) {
+      const info = gl.getProgramInfoLog(program,);
+      gl.deleteProgram(program,);
+      throw new Error(`Program linking failed: ${info}`,);
+    }
+    return program;
+  }
+  /**
+   * Creates a new Vertex Array Object (VAO), which stores vertex attribute
+   * configuration so it can be restored with a single bindVertexArray call.
+   * We only have one geometry so the VAO stays bound, but it's the idiomatic
+   * WebGL2 approach and keeps attribute state explicitly managed.
+   */
+  createVertexArrayObject() {
+    const vao = this.gl.createVertexArray();
+    if (!vao) {
+      throw new Error('Failed to create vertex array object',);
+    }
+    return vao;
+  }
+  /**
+   * Sets up fullscreen quad geometry on the currently bound VAO.
+   * Two triangles spanning from (-1,-1) to (1,1) in clip space with UV coordinates.
+   */
+  setupFullScreenQuad() {
+    const {
+      gl,
+      program,
+    } = this;
+    const positions = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1,],);
+    const texCoords = new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1,],);
+    const positionBuffer = gl.createBuffer();
+    if (!positionBuffer) {
+      throw new Error('Failed to create position buffer',);
+    }
+    this.buffers.push(positionBuffer,);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer,);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW,);
+    const positionLocation = gl.getAttribLocation(program, 'a_position',);
+    gl.enableVertexAttribArray(positionLocation,);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0,);
+    const texCoordBuffer = gl.createBuffer();
+    if (!texCoordBuffer) {
+      throw new Error('Failed to create texCoord buffer',);
+    }
+    this.buffers.push(texCoordBuffer,);
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer,);
+    gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW,);
+    const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord',);
+    gl.enableVertexAttribArray(texCoordLocation,);
+    gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0,);
+  }
+  /**
+   * Sets a non-texture uniform value in the shader program.
+   */
+  setUniform(location, uniform,) {
+    if (location === null) return;
+    switch (uniform.type) {
+      case 'boolean':
+        this.gl.uniform1f(location, uniform.value ? 1 : 0,);
+        break;
+      case 'float':
+        this.gl.uniform1f(location, uniform.value,);
+        break;
+      case 'int':
+        this.gl.uniform1i(location, uniform.value,);
+        break;
+      case 'vec2':
+        this.gl.uniform2fv(location, uniform.value,);
+        break;
+      case 'vec3':
+        this.gl.uniform3fv(location, uniform.value,);
+        break;
+      case 'vec4':
+        this.gl.uniform4fv(location, uniform.value,);
+        break;
+      case 'vec4[]':
+        this.gl.uniform4fv(location, uniform.value.flat(),);
+        break;
+    }
+  }
+  /**
+   * Creates or updates a texture from an ImageBitmap.
+   * Binds the texture to the specified texture unit.
+   */
+  bindTexture(uniformName, image, textureUnit,) {
+    const {
+      gl,
+      textures,
+    } = this;
+    let entry = textures.get(uniformName,);
+    const isNewTexture = !entry;
+    if (isNewTexture) {
+      const texture = gl.createTexture();
+      if (!texture) return;
+      entry = {
+        texture,
+        image: null,
+      };
+      textures.set(uniformName, entry,);
+    }
+    if (!entry) return;
+    gl.activeTexture(gl.TEXTURE0 + textureUnit,);
+    gl.bindTexture(gl.TEXTURE_2D, entry.texture,);
+    if (isNewTexture || entry.image !== image) {
+      entry.image?.close();
+      entry.image = image;
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image,);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE,);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE,);
+      gl.generateMipmap(gl.TEXTURE_2D,);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR,);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR,);
+    }
+  }
+  updateBuiltInUniforms(elapsedTime, deltaTime,) {
+    const {
+      gl,
+      builtInUniformLocations: locations,
+      canvas,
+      pixelRatio,
+    } = this;
+    if (locations[builtInUniforms.time.name] !== null) {
+      gl.uniform1f(locations[builtInUniforms.time.name], elapsedTime,);
+    }
+    if (locations[builtInUniforms.resolution.name] !== null) {
+      gl.uniform2f(locations[builtInUniforms.resolution.name], canvas.width, canvas.height,);
+    }
+    if (locations[builtInUniforms.deltaTime.name] !== null) {
+      gl.uniform1f(locations[builtInUniforms.deltaTime.name], deltaTime,);
+    }
+    if (locations[builtInUniforms.pixelRatio.name] !== null) {
+      gl.uniform1f(locations[builtInUniforms.pixelRatio.name], pixelRatio,);
+    }
+  }
+};
+function controlTypeToGLSLType(controlType,) {
+  switch (controlType) {
+    case 'number':
+    case 'enum':
+      return 'float';
+    case 'boolean':
+      return 'float';
+    case 'color':
+      return 'vec4';
+    case 'responsiveimage':
+      return 'sampler2D';
+    default:
+      assertNever(controlType,);
+  }
+}
+function toUniformName(key7,) {
+  return `${uniformPrefix}${key7}`;
+}
+function toArrayLengthName(uniformName,) {
+  return `${uniformName}_length`;
+}
+function toArrayMaxLengthName(key7,) {
+  const keyAsConstantCase = key7.replace(/[a-z0-9](?=[A-Z])/g, '$&_',).toUpperCase();
+  return `NUM_${keyAsConstantCase}`;
+}
+var glslVersionDirective = '#version 300 es';
+var glslPrecisionDirective = 'precision highp float;';
+var glslUVInput = 'in vec2 v_uv;';
+var glslFragColorOutput = 'out vec4 fragColor;';
+function generateShaderHead(propertyControls,) {
+  const lines = [glslVersionDirective, glslPrecisionDirective, '', glslUVInput, glslFragColorOutput,];
+  const values = propertyControls ? Object.values(propertyControls,) : [];
+  if (values.length > 0) {
+    const hasArrays = values.some((control) => control?.type === 'array'/* Array */
+    );
+    if (hasArrays) {
+      lines.push('',);
+      for (const key7 in propertyControls) {
+        const control = propertyControls[key7];
+        if (!control || control.type !== 'array') continue;
+        if (control.control?.type !== 'color') {
+          throw new Error(`Shader array control "${key7}" is not supported. Only color arrays may be defined.`,);
+        }
+        if (!isNumber2(control.maxCount,)) {
+          throw new Error(`Shader array control "${key7}" must have a maxCount.`,);
+        }
+        lines.push(`#define ${toArrayMaxLengthName(key7,)} ${control.maxCount}`,);
+      }
+    }
+    lines.push('',);
+    for (const key7 in propertyControls) {
+      const control = propertyControls[key7];
+      if (!control) continue;
+      if (control.type === 'array') {
+        const name = toUniformName(key7,);
+        lines.push(`uniform vec4 ${name}[${toArrayMaxLengthName(key7,)}];`,);
+        lines.push(`uniform int ${toArrayLengthName(name,)};`,);
+      } else {
+        const glslType = controlTypeToGLSLType(control.type,);
+        lines.push(`uniform ${glslType} ${toUniformName(key7,)};`,);
+      }
+    }
+  }
+  lines.push('',);
+  for (const uniform of Object.values(builtInUniforms,)) {
+    lines.push(`uniform ${uniform.glslType} ${uniform.name};`,);
+  }
+  lines.push('',);
+  return lines.join('\n',);
+}
+function prepareFragmentShader(fragment, propertyControls,) {
+  return generateShaderHead(propertyControls,) + fragment;
+}
+var shaderConfigBrand = '__framer_shaderConfig__';
+function isShaderConfig(obj,) {
+  return isObject2(obj,) && shaderConfigBrand in obj;
+}
+function defineShader(shaderConfig,) {
+  const preparedFragment = prepareFragmentShader(shaderConfig.fragment, shaderConfig.propertyControls,);
+  return {
+    ...shaderConfig,
+    fragment: preparedFragment,
+    [shaderConfigBrand]: true,
+  };
+}
+var ShaderFallbackImage = /* @__PURE__ */ memo2(function ShaderFallbackImage2({
+  src,
+},) {
+  if (!src) return null;
+  return /* @__PURE__ */ jsx(BackgroundImageComponent, {
+    image: {
+      src,
+      fit: 'fill',
+    },
+    alt: '',
+  },);
+},);
+var overlayStyle = {
+  position: 'absolute',
+  inset: 0,
+  zIndex: 1,
+  width: '100%',
+  height: '100%',
+};
+var timeMultiplier = 1e-3;
+function colorToVec4(color2,) {
+  const rgba2 = Color.toRgb(Color(color2,),);
+  return [rgba2.r / 255, rgba2.g / 255, rgba2.b / 255, rgba2.a,];
+}
+async function loadTexture(url,) {
+  const response = await fetch(url,);
+  if (!response.ok) throw new Error('Failed to load texture',);
+  const blob = await response.blob();
+  return createImageBitmap(blob,);
+}
+async function resolveUniform(uniform,) {
+  switch (uniform.type) {
+    case 'number':
+    case 'enum':
+      return {
+        type: 'float',
+        value: uniform.value,
+      };
+    case 'boolean':
+      return {
+        type: 'boolean',
+        value: uniform.value,
+      };
+    case 'color':
+      return {
+        type: 'vec4',
+        value: colorToVec4(uniform.value,),
+      };
+    case 'responsiveimage': {
+      let url;
+      if (isString(uniform.value,)) {
+        url = uniform.value;
+      } else if (isObject2(uniform.value,) && 'src' in uniform.value) {
+        url = uniform.value.src;
+      }
+      if (!url) return;
+      const image = await loadTexture(url,);
+      return {
+        type: 'sampler2D',
+        value: image,
+      };
+    }
+    case 'array':
+      return {
+        type: 'vec4[]',
+        value: uniform.value.map(colorToVec4,),
+      };
+    default:
+      assertNever(uniform,);
+  }
+}
+async function resolveUniforms(uniforms,) {
+  const result = {};
+  for (const [name, uniform,] of Object.entries(uniforms,)) {
+    const resolved = await resolveUniform(uniform,);
+    if (!resolved) continue;
+    result[name] = resolved;
+    if (uniform.type === 'array') {
+      result[toArrayLengthName(name,)] = {
+        type: 'int',
+        value: uniform.value.length,
+      };
+    }
+  }
+  return result;
+}
+function closeImageBitmaps(uniforms,) {
+  for (const uniform of Object.values(uniforms,)) {
+    if (uniform.type === 'sampler2D') {
+      uniform.value.close();
+    }
+  }
+}
+function resolveResolutionScale(scale2,) {
+  if (typeof scale2 === 'number') return scale2;
+  if (scale2 === 'performance') return 0.75;
+  if (scale2 === 'consistent') return 0;
+  return 1;
+}
+function getShaderTiming(timeMs, startTime, lastTime,) {
+  const currentTime = timeMs * timeMultiplier;
+  const elapsedTime = currentTime - startTime;
+  const deltaTime = lastTime === startTime ? 1 / 60 : currentTime - lastTime;
+  return {
+    currentTime,
+    elapsedTime,
+    deltaTime,
+  };
+}
+var sandboxFallbackImageStyle = {
+  display: 'block',
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover',
+  position: 'absolute',
+  inset: 0,
+};
+var sandboxFallbackContainerStyle = {
+  position: 'absolute',
+  inset: 0,
+};
+var ShaderSandboxFallbackImage = /* @__PURE__ */ memo2(function ShaderSandboxFallbackImage2({
+  src,
+  hidden = false,
+},) {
+  const [displaySrc, setDisplaySrc,] = useState(src,);
+  const [previousSrc, setPreviousSrc,] = useState(void 0,);
+  const fadeRef = useRef(null,);
+  useEffect(() => {
+    if (src === displaySrc) return;
+    let isActive = true;
+    if (src) {
+      const img = new Image();
+      img.src = src;
+      const setSrc = () => isActive ? startTransition2(() => setDisplaySrc(src,)) : void 0;
+      if (typeof img.decode === 'function') {
+        img.decode().then(setSrc,).catch(setSrc,);
+      } else {
+        img.onload = setSrc;
+      }
+    } else {
+      startTransition2(() => setDisplaySrc(void 0,));
+    }
+    return () => {
+      isActive = false;
+    };
+  }, [src, displaySrc,],);
+  const prevDisplayRef = useRef(displaySrc,);
+  useLayoutEffect(() => {
+    if (displaySrc !== prevDisplayRef.current && prevDisplayRef.current) {
+      setPreviousSrc(prevDisplayRef.current,);
+    }
+    prevDisplayRef.current = displaySrc;
+  }, [displaySrc,],);
+  useEffect(() => {
+    const el = fadeRef.current;
+    if (!el || !previousSrc) return;
+    let cancelled = false;
+    const animation = el.animate([{
+      opacity: 0,
+    }, {
+      opacity: 1,
+    },], {
+      duration: 300,
+      easing: 'ease-in-out',
+      fill: 'forwards',
+    },);
+    animation.onfinish = () => {
+      if (!cancelled) startTransition2(() => setPreviousSrc(void 0,));
+    };
+    return () => {
+      cancelled = true;
+      animation.cancel();
+    };
+  }, [previousSrc,],);
+  if (!displaySrc) return null;
+  const containerStyle2 = {
+    ...overlayStyle,
+    opacity: hidden ? 0 : 1,
+    pointerEvents: hidden ? 'none' : 'auto',
+  };
+  return /* @__PURE__ */ jsxs('div', {
+    style: containerStyle2,
+    children: [
+      previousSrc && /* @__PURE__ */ jsx('img', {
+        src: previousSrc,
+        decoding: 'async',
+        style: sandboxFallbackImageStyle,
+        alt: '',
+      }, previousSrc,),
+      /* @__PURE__ */ jsx('div', {
+        ref: previousSrc ? fadeRef : void 0,
+        style: sandboxFallbackContainerStyle,
+        children: /* @__PURE__ */ jsx('img', {
+          src: displaySrc,
+          style: sandboxFallbackImageStyle,
+          decoding: 'async',
+          alt: '',
+        },),
+      }, displaySrc,),
+    ],
+  },);
+},);
+var DEFAULT_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+in vec2 a_texCoord;
+
+out vec2 v_uv;
+
+void main() {
+    v_uv = a_texCoord;
+    gl_Position = vec4(a_position, 0.0, 1.0);
+}
+`;
+var DEFAULT_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 v_uv;
+out vec4 fragColor;
+
+void main() {
+    fragColor = vec4(0.0);
+}
+`;
+function useResolvedUniforms(uniforms,) {
+  const [resolvedUniforms, setResolvedUniforms,] = useState({},);
+  useEffect(() => {
+    if (!uniforms) return;
+    let isCancelled = false;
+    resolveUniforms(uniforms,).then((resolved) => {
+      if (!isCancelled) {
+        startTransition2(() => setResolvedUniforms(resolved,));
+      } else {
+        closeImageBitmaps(resolved,);
+      }
+    },).catch(() => {},);
+    return () => {
+      isCancelled = true;
+    };
+  }, [uniforms,],);
+  return resolvedUniforms;
+}
+function useCanvasResize(canvasRef, resizeHandler,) {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const resizeObserver = new ResizeObserver(resizeHandler,);
+    resizeObserver.observe(canvas,);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [canvasRef, resizeHandler,],);
+  useOnDprChange(resizeHandler,);
+}
+function useOnDprChange(callback,) {
+  useEffect(() => {
+    let dprQuery = matchMedia(`(resolution: ${__unframerWindow2.devicePixelRatio}dppx)`,);
+    const handleChange = () => {
+      callback();
+      dprQuery.removeEventListener('change', handleChange,);
+      dprQuery = matchMedia(`(resolution: ${__unframerWindow2.devicePixelRatio}dppx)`,);
+      dprQuery.addEventListener('change', handleChange,);
+    };
+    dprQuery.addEventListener('change', handleChange,);
+    return () => {
+      dprQuery.removeEventListener('change', handleChange,);
+    };
+  }, [callback,],);
+}
+function useWhenBrowserIdle(enabled = true,) {
+  const [isIdle, setIsIdle,] = useState(!enabled,);
+  useEffect(() => {
+    if (!enabled) return;
+    const requestIdleCallback2 = supportsRequestIdleCallback ? safeWindow.requestIdleCallback : (callback) => setTimeout(callback, 1,);
+    const id3 = requestIdleCallback2(() => {
+      startTransition2(() => setIsIdle(true,));
+    },);
+    return () => {
+      if (supportsRequestIdleCallback) cancelIdleCallback(id3,);
+      else clearTimeout(id3,);
+    };
+  }, [enabled,],);
+  return isIdle;
+}
+var canvasStyle = {
+  display: 'block',
+  width: '100%',
+  height: '100%',
+};
+function ShaderCanvas({
+  vertexShader = DEFAULT_VERTEX_SHADER,
+  fragmentShader = DEFAULT_FRAGMENT_SHADER,
+  animated = true,
+  resolutionScale,
+  uniforms,
+  onError,
+  onReady,
+  paused = false,
+},) {
+  const canvasRef = useRef(null,);
+  const rendererRef = useRef(null,);
+  const animationFrameRef = useRef(0,);
+  const startTimeRef = useRef(0,);
+  const lastTimeRef = useRef(0,);
+  const onReadyRef = useRef(onReady,);
+  useLayoutEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady,],);
+  const resolvedUniforms = useResolvedUniforms(uniforms,);
+  const resolvedUniformsRef = useRef(resolvedUniforms,);
+  useLayoutEffect(() => {
+    resolvedUniformsRef.current = resolvedUniforms;
+  }, [resolvedUniforms,],);
+  const animatedRef = useRef(animated,);
+  useLayoutEffect(() => {
+    animatedRef.current = animated;
+  }, [animated,],);
+  const pausedRef = useRef(paused,);
+  useLayoutEffect(() => {
+    pausedRef.current = paused;
+  }, [paused,],);
+  const animate3 = useCallback2((time2) => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.resize();
+    if (pausedRef.current) {
+      const elapsedTime = lastTimeRef.current - startTimeRef.current;
+      renderer.render(elapsedTime, 0, resolvedUniformsRef.current,);
+    } else {
+      const {
+        currentTime,
+        elapsedTime,
+        deltaTime,
+      } = getShaderTiming(time2, startTimeRef.current, lastTimeRef.current,);
+      lastTimeRef.current = currentTime;
+      renderer.render(elapsedTime, deltaTime, resolvedUniformsRef.current,);
+    }
+    if (animatedRef.current || pausedRef.current) {
+      animationFrameRef.current = requestAnimationFrame(animate3,);
+    }
+  }, [],);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let cancelled = false;
+    try {
+      const renderer = new WebGL2ShaderRenderer(canvas, vertexShader, fragmentShader, resolveResolutionScale(resolutionScale,),);
+      rendererRef.current = renderer;
+      renderer.resize();
+      startTimeRef.current = performance.now() * timeMultiplier;
+      lastTimeRef.current = startTimeRef.current;
+      animationFrameRef.current = requestAnimationFrame(animate3,);
+      requestAnimationFrame(() => {
+        if (!cancelled) onReadyRef.current?.();
+      },);
+    } catch (error) {
+      if (onError && error instanceof Error) {
+        onError(error,);
+      }
+    }
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(animationFrameRef.current,);
+      rendererRef.current?.dispose();
+      rendererRef.current = null;
+    };
+  }, [vertexShader, fragmentShader, resolutionScale, animate3, onError,],);
+  const wasAnimatedRef = useRef(animated,);
+  useEffect(() => {
+    if (animated && !wasAnimatedRef.current && rendererRef.current) {
+      animationFrameRef.current = requestAnimationFrame(animate3,);
+    }
+    wasAnimatedRef.current = animated;
+  }, [animated, animate3,],);
+  const wasPausedRef = useRef(paused,);
+  useLayoutEffect(() => {
+    if (wasPausedRef.current && !paused) {
+      startTimeRef.current = performance.now() * timeMultiplier;
+      lastTimeRef.current = startTimeRef.current;
+    }
+    wasPausedRef.current = paused;
+  }, [paused,],);
+  const handleResize = useCallback2(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.resize();
+    const {
+      currentTime,
+      elapsedTime,
+      deltaTime,
+    } = getShaderTiming(performance.now(), startTimeRef.current, lastTimeRef.current,);
+    lastTimeRef.current = currentTime;
+    renderer.render(elapsedTime, deltaTime, resolvedUniformsRef.current,);
+  }, [],);
+  useCanvasResize(canvasRef, handleResize,);
+  return /* @__PURE__ */ jsx('canvas', {
+    ref: canvasRef,
+    style: canvasStyle,
+  },);
+}
+var SHADER_PLAY_DELAY = 250;
+var ShaderWithFallbackOverlay = /* @__PURE__ */ memo2(function ShaderWithFallbackOverlay2({
+  mode,
+  fallbackImage,
+  optimiseSwitching,
+  vertexShader,
+  fragmentShader,
+  animated,
+  resolutionScale,
+  uniforms,
+  onError,
+  onReady,
+},) {
+  const isProgressive = mode === 'progressive';
+  const isIdle = useWhenBrowserIdle(isProgressive,);
+  const [isShaderReady, setIsShaderReady,] = useState(false,);
+  const [shouldPlay, setShouldPlay,] = useState(false,);
+  const onReadyRef = useRef(onReady,);
+  useLayoutEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady,],);
+  const handleReady = useCallback2(() => {
+    startTransition2(() => setIsShaderReady(true,));
+    onReadyRef.current?.();
+  }, [],);
+  useEffect(() => {
+    if (!isProgressive || !isShaderReady) return;
+    let timeout;
+    if (SHADER_PLAY_DELAY) {
+      timeout = __unframerWindow2.setTimeout(() => {
+        startTransition2(() => setShouldPlay(true,));
+      }, SHADER_PLAY_DELAY,);
+    } else {
+      startTransition2(() => setShouldPlay(true,));
+    }
+    return () => SHADER_PLAY_DELAY ? clearTimeout(timeout,) : void 0;
+  }, [isProgressive, isShaderReady,],);
+  const paused = isProgressive && !shouldPlay;
+  return /* @__PURE__ */ jsxs(Fragment, {
+    children: [
+      isIdle && /* @__PURE__ */ jsx(ShaderCanvas, {
+        vertexShader,
+        fragmentShader,
+        animated,
+        resolutionScale,
+        paused,
+        uniforms,
+        onError,
+        onReady: handleReady,
+      },),
+      !isShaderReady && fallbackImage && /* @__PURE__ */ jsx('div', {
+        style: overlayStyle,
+        children: optimiseSwitching
+          ? /* @__PURE__ */ jsx(ShaderSandboxFallbackImage, {
+            src: fallbackImage,
+          },)
+          : /* @__PURE__ */ jsx(ShaderFallbackImage, {
+            src: fallbackImage,
+          },),
+      },),
+    ],
+  },);
+},);
+var Shader = /* @__PURE__ */ forwardRef(function Shader2({
+  mode = 'instant',
+  fallbackImage,
+  optimiseSwitching,
+  style: style2,
+  width,
+  height,
+  vertexShader,
+  fragmentShader,
+  animated,
+  uniforms,
+  onError,
+  onReady,
+  resolutionScale,
+  ...rest
+}, ref,) {
+  const observerRef = useObserverRef(ref,);
+  const [isIntersecting, setIsIntersecting,] = useState(false,);
+  const intersectionCallback = useCallback2((entry) => {
+    startTransition2(() => setIsIntersecting(entry.isIntersecting,));
+  }, [],);
+  useSharedIntersectionObserver(observerRef, intersectionCallback, {
+    threshold: 0,
+    enabled: true,
+  },);
+  const shouldReduceMotion = useReducedMotionConfig();
+  const isFallbackOnly = mode === 'fallback' || shouldReduceMotion && !!fallbackImage || !isIntersecting;
+  const shaderProps = {
+    vertexShader,
+    fragmentShader,
+    animated,
+    uniforms,
+    resolutionScale,
+    onError,
+  };
+  const [isShaderReady, setIsShaderReady,] = useState(false,);
+  useLayoutEffect(() => {
+    if (isFallbackOnly) setIsShaderReady(false,);
+  }, [isFallbackOnly,],);
+  const handleShaderReady = useCallback2(() => {
+    startTransition2(() => setIsShaderReady(true,));
+    onReady?.();
+  }, [onReady,],);
+  const hideFallback = !isFallbackOnly && isShaderReady;
+  return /* @__PURE__ */ jsx(FrameWithMotion2, {
+    ref: observerRef,
+    __fromCanvasComponent: true,
+    style: {
+      ...style2,
+      overflow: 'hidden',
+    },
+    width,
+    height,
+    ...rest,
+    children: optimiseSwitching
+      ? /* @__PURE__ */ jsxs(Fragment, {
+        children: [
+          !isFallbackOnly && /* @__PURE__ */ jsx(ShaderWithFallbackOverlay, {
+            mode,
+            onReady: handleShaderReady,
+            ...shaderProps,
+          },),
+          /* @__PURE__ */ jsx(ShaderSandboxFallbackImage, {
+            src: fallbackImage,
+            hidden: hideFallback,
+          },),
+        ],
+      },)
+      : isFallbackOnly
+      ? /* @__PURE__ */ jsx(ShaderFallbackImage, {
+        src: fallbackImage,
+      },)
+      : /* @__PURE__ */ jsx(ShaderWithFallbackOverlay, {
+        mode,
+        fallbackImage,
+        onReady,
+        ...shaderProps,
+      },),
+  },);
+},);
 var keys2 = /* @__PURE__ */ new Set([
   'visibleVariantId',
   'obscuredVariantId',
@@ -48209,9 +49490,15 @@ var withVariantAppearEffect = (Component18) =>
         y: threshold2,
       },
     },);
+    const currentRouteKey = useCurrentRouteKey();
+    const prevRouteKey = React42.useRef(currentRouteKey,);
     React42.useEffect(() => {
       if (scrollDirection) return;
       if (!targets) return;
+      if (prevRouteKey.current !== currentRouteKey) {
+        prevRouteKey.current = currentRouteKey;
+        React42.startTransition(() => setVariant(obscuredVariantId,));
+      }
       const playedState = {};
       let currentVariant = void 0;
       return scroll((_, {
@@ -48233,7 +49520,7 @@ var withVariantAppearEffect = (Component18) =>
           setVariant(variant,);
         },);
       },);
-    }, [animateOnce, threshold2, targets, props.variant, scrollDirection, exitTarget,],);
+    }, [currentRouteKey, animateOnce, threshold2, targets, props.variant, scrollDirection, exitTarget,],);
     useScrollDirectionChange(scrollDirection, (variant) => React42.startTransition(() => setVariant(variant,)), {
       enabled: variantAppearEffectEnabled,
       repeat: !animateOnce,
@@ -48242,7 +49529,7 @@ var withVariantAppearEffect = (Component18) =>
       if (!variantAppearEffectEnabled) return;
       const useObscuredVariant = !options.targets && !options.scrollDirection;
       const target = useObscuredVariant ? options.obscuredVariantId : void 0;
-      startTransition2(() => setVariant(target,));
+      React42.startTransition(() => setVariant(target,));
     },);
     if (!('variantAppearEffectEnabled' in options) || variantAppearEffectEnabled === true) {
       return /* @__PURE__ */ jsx(Component18, {
@@ -49625,7 +50912,7 @@ var CustomFontSource = class _CustomFontSource {
           fonts[selector] = font;
         }
       } else if (duplicateInfo) {
-        log2.warn('Duplicate font found for:', font, 'with existing font:', duplicateInfo.existingFont,);
+        log2.debug('Duplicate font found for:', font, 'with existing font:', duplicateInfo.existingFont,);
         const existingFont = duplicateInfo.existingFont;
         const newIsWoff2 = font.file?.endsWith('.woff2',) ?? false;
         const existingIsWoff2 = existingFont.file?.endsWith('.woff2',) ?? false;
@@ -50697,6 +51984,29 @@ function CustomProperties({
     children,
   },);
 }
+var defaultGetValueFromEvent = (event) => {
+  return event.target.value;
+};
+function useOptimisticValue(externalValue, shouldSyncExternalValue, onChange, getValueFromEvent = defaultGetValueFromEvent,) {
+  const [optimisticValue, setOptimisticValue,] = React42.useState(externalValue,);
+  const [previousExternalValue, setPreviousExternalValue,] = React42.useState(externalValue,);
+  if (shouldSyncExternalValue && externalValue !== previousExternalValue) {
+    setPreviousExternalValue(externalValue,);
+    setOptimisticValue(externalValue,);
+  }
+  const handleChange = React42.useCallback((event) => {
+    if (shouldIgnoreReplayEvent(event,)) return;
+    if (shouldSyncExternalValue) {
+      setOptimisticValue(getValueFromEvent(event,),);
+    }
+    if (onChange) {
+      React42.startTransition(() => {
+        onChange(event,);
+      },);
+    }
+  }, [getValueFromEvent, onChange, shouldSyncExternalValue,],);
+  return [optimisticValue, setOptimisticValue, handleChange,];
+}
 var passwordManagerIgnoreDataProps = {
   // 1Password
   'data-1p-ignore': true,
@@ -50722,7 +52032,8 @@ var PlainTextInput = /* @__PURE__ */ forwardRef(function FormPlainTextInput(prop
     style: style2,
     type,
     maxLength,
-    // We use a defaultValue instead of a value so that the input remains
+    value,
+    // We allow a defaultValue instead of a value so that the input remains
     // uncontrolled by React. This is important because we want the user
     // to be able to provide an initial value in the property panel, and for
     // the value to be editable by the user in the preview.
@@ -50733,23 +52044,19 @@ var PlainTextInput = /* @__PURE__ */ forwardRef(function FormPlainTextInput(prop
     onInvalid,
     onFocus,
     onValid,
+    onClear,
     ...rest
   } = props;
-  const [hasValue, setHasValue,] = useState(!!defaultValue,);
-  const [prevDefaultValue, setPrevDefaultValue,] = useState();
-  const isCanvas = useIsOnFramerCanvas();
-  if (defaultValue !== prevDefaultValue) {
-    setHasValue(!!defaultValue,);
-    setPrevDefaultValue(defaultValue,);
-  }
-  const handleChange = useCallback2(async (e) => {
-    await yieldToMain({
-      continueAfter: 'paint',
-    },);
-    const newValue = e.target.value;
-    onChange?.(e,);
-    startTransition2(() => setHasValue(!!newValue,));
-  }, [onChange,],);
+  const externalValue = value ?? defaultValue;
+  const normalizedExternalValue = normalizeValueForInputType(externalValue, type,);
+  const [optimisticValue, setOptimisticValue, handleChange,] = useOptimisticValue(normalizedExternalValue ?? '', true, onChange,);
+  const setInputRef = useReplayPreHydrationInput(normalizedExternalValue,);
+  const handleClear = useCallback2(() => {
+    setOptimisticValue('',);
+    if (onClear) {
+      startTransition2(() => onClear());
+    }
+  }, [onClear, setOptimisticValue,],);
   const eventHandlers = useCustomValidity(onValid, onInvalid, handleChange, onBlur, onFocus,);
   if (type === 'hidden') {
     return /* @__PURE__ */ jsx(motion.input, {
@@ -50759,42 +52066,84 @@ var PlainTextInput = /* @__PURE__ */ forwardRef(function FormPlainTextInput(prop
     },);
   }
   const dataProps = autofillEnabled === false ? passwordManagerIgnoreDataProps : void 0;
-  return /* @__PURE__ */ jsx(motion.div, {
+  const hasValue = !!optimisticValue;
+  const showClear = !!onClear && hasValue;
+  return /* @__PURE__ */ jsxs(motion.div, {
     ref,
     style: style2,
-    className: cx(textInputWrapperClassName, inputWrapperClassName, className2,),
+    className: cx(
+      textInputWrapperClassName,
+      inputWrapperClassName,
+      className2,
+      type === 'text' && textInputTypeWrapperClassName,
+      onClear && hasClearButtonClassName,
+    ),
     ...rest,
-    children: type === 'textarea'
-      ? /* @__PURE__ */ jsx(motion.textarea, {
-        ...dataProps,
-        ...eventHandlers,
-        required,
-        autoFocus,
-        name: inputName,
-        placeholder,
-        className: inputClassName,
-        defaultValue,
-        maxLength,
-      }, isCanvas ? defaultValue : void 0,)
-      : /* @__PURE__ */ jsx(motion.input, {
-        ...dataProps,
-        ...eventHandlers,
-        type,
-        required,
-        autoFocus,
-        name: inputName,
-        placeholder,
-        className: cx(inputClassName, !hasValue && emptyValueClassName,),
-        defaultValue,
-        min,
-        max,
-        step: step2,
-        maxLength,
-      }, isCanvas ? defaultValue : void 0,),
+    children: [
+      type === 'textarea'
+        ? /* @__PURE__ */ jsx(motion.textarea, {
+          ref: setInputRef,
+          ...dataProps,
+          ...eventHandlers,
+          required,
+          autoFocus,
+          name: inputName,
+          placeholder,
+          className: inputClassName,
+          value: optimisticValue,
+          maxLength,
+        },)
+        : /* @__PURE__ */ jsx(motion.input, {
+          ref: setInputRef,
+          ...dataProps,
+          ...eventHandlers,
+          type,
+          required,
+          autoFocus,
+          name: inputName,
+          placeholder,
+          className: cx(inputClassName, !hasValue && emptyValueClassName,),
+          value: optimisticValue,
+          min,
+          max,
+          step: step2,
+          maxLength,
+        },),
+      showClear && /* @__PURE__ */ jsx('button', {
+        type: 'button',
+        className: clearButtonClassName,
+        onClick: handleClear,
+        'aria-label': 'Clear',
+        children: /* @__PURE__ */ jsx(ClearIcon, {},),
+      },),
+    ],
   },);
 },);
-var iconSize2 = 16;
+function normalizeValueForInputType(value, type,) {
+  if (!value || type !== 'date') return value;
+  if (value.includes('T',)) return value.split('T',)[0];
+  return value;
+}
+function ClearIcon() {
+  return /* @__PURE__ */ jsx('svg', {
+    xmlns: 'http://www.w3.org/2000/svg',
+    width: '8',
+    height: '8',
+    viewBox: '0 0 8 8',
+    'aria-hidden': 'true',
+    children: /* @__PURE__ */ jsx('path', {
+      d: 'm1.5 6.5 5-5M6.5 6.5l-5-5',
+      fill: 'none',
+      stroke: 'currentColor',
+      strokeWidth: '1.5',
+      strokeLinecap: 'round',
+    },),
+  },);
+}
 var textInputWrapperClassName = 'framer-form-text-input';
+var textInputTypeWrapperClassName = 'framer-form-text-input-type';
+var clearButtonClassName = 'framer-form-text-input-clear';
+var hasClearButtonClassName = 'framer-form-text-input-has-clear-button';
 var defaultTextareaResizerIcon =
   `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"><path d="m1.5 8 7-7M9 5.5l-3 3" stroke="%23999" stroke-width="1.5" stroke-linecap="round"></path></svg>`;
 var defaultTextareaResizerIconFlipped =
@@ -50881,13 +52230,14 @@ var styles = /* @__PURE__ */ (() => [
     ),
     overflow: 'visible',
   },),
+  // Date/time input right-positioned input icon
   css2(
     `.${textInputWrapperClassName} .${inputClassName}[type="date"]::before, .${textInputWrapperClassName} .${inputClassName}[type="time"]::before`,
     {
       ...inputIconCSSDeclaration,
-      paddingLeft: `${iconSpacing}px`,
-      maskPosition: `${iconSpacing}px center`,
-      backgroundPosition: `${iconSpacing}px center`,
+      paddingLeft: `${rightIconSpacing}px`,
+      maskPosition: `${rightIconSpacing}px center`,
+      backgroundPosition: `${rightIconSpacing}px center`,
     },
   ),
   css2(`.${textInputWrapperClassName} .${inputClassName}[type="date"]::before`, {
@@ -50897,6 +52247,35 @@ var styles = /* @__PURE__ */ (() => [
   },),
   css2(`.${textInputWrapperClassName} .${inputClassName}[type="time"]::before`, {
     maskImage: css2.variable('--framer-input-icon-mask-image', encodeSVGForCSS(defaultTimeIconMaskImage,),),
+    backgroundImage: css2.variable('--framer-input-icon-image',/* IconBackgroundImage */
+    ),
+  },),
+  // type="text" input might have a left-positioned icon so we need to apply the padding to the wrapper
+  // and make icon statically positioned
+  css2(`.${textInputWrapperClassName}.${textInputTypeWrapperClassName}`, {
+    display: 'flex',
+    alignItems: 'center',
+    padding: css2.variable('--framer-input-padding',/* Padding */
+    ),
+  },),
+  css2(`.${textInputWrapperClassName} .${inputClassName}[type="text"]`, {
+    flex: 1,
+    minWidth: 0,
+    width: 'auto',
+    padding: 0,
+  },),
+  css2(`.${textInputWrapperClassName}.${textInputTypeWrapperClassName}::before`, {
+    content: css2.variable('--framer-input-icon-content', 'none',),
+    display: 'block',
+    flexShrink: 0,
+    width: `${iconSize}px`,
+    height: `${iconSize}px`,
+    marginRight: `${leftIconSpacing}px`,
+    ...iconImageCSS,
+    backgroundPosition: 'center',
+    maskPosition: 'center',
+    maskImage: css2.variable('--framer-input-icon-mask-image',/* IconMaskImage */
+    ),
     backgroundImage: css2.variable('--framer-input-icon-image',/* IconBackgroundImage */
     ),
   },),
@@ -50912,7 +52291,7 @@ var styles = /* @__PURE__ */ (() => [
     ),
     paddingTop: 0,
     paddingBottom: 0,
-    width: `${iconSize2}px`,
+    width: `${iconSize}px`,
     // Makes sure the icon hit target covers the entire height of the input.
     height: '100%',
   },),
@@ -50929,32 +52308,77 @@ var styles = /* @__PURE__ */ (() => [
     ),
     borderWidth: css2.variable('--framer-input-focused-border-width', inputBorderAllSides,),
   },),
+  css2(`.${clearButtonClassName}`, {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: `${iconSize}px`,
+    boxSizing: 'content-box',
+    padding: css2.variable('--framer-input-padding',/* Padding */
+    ),
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    color: css2.variable('--framer-input-placeholder-color',/* PlaceholderColor */
+    ),
+    transition: 'color 0.15s ease',
+    outline: 'none',
+  },),
+  css2(`.${clearButtonClassName}:hover, .${clearButtonClassName}:focus-visible`, {
+    color: css2.variable('--framer-input-font-color',/* FontColor */
+    ),
+  },),
+  css2(`.${textInputWrapperClassName}.${hasClearButtonClassName} .${inputClassName}`, {
+    paddingRight: `calc(${
+      css2.variable('--framer-input-padding',/* Padding */
+      )
+    } + ${iconSize}px + ${rightIconSpacing}px)`,
+  },),
 ])();
 var FormPlainTextInput2 = /* @__PURE__ */ withCSS(PlainTextInput, styles, 'framer-lib-form-plain-text-input',);
 var className = 'framer-form-boolean-input';
-var BooleanInput = /* @__PURE__ */ React42.forwardRef(function FormPlainTextInput3(props, ref,) {
+var getCheckedFromEvent = (event) => event.target.checked;
+var BooleanInput = /* @__PURE__ */ React42.forwardRef(function FormBooleanInput(props, ref,) {
   const {
     inputName,
     type = 'checkbox',
     defaultChecked,
+    checked,
     onValid,
+    onChange,
+    onBlur,
+    onFocus,
+    onInvalid,
     ...rest
   } = props;
   const isCanvas = useIsOnFramerCanvas();
+  const isControlled = !isCanvas && checked !== void 0;
+  const externalChecked = checked ?? false;
+  const [optimisticChecked, , handleChange,] = useOptimisticValue(externalChecked, isControlled, onChange, getCheckedFromEvent,);
+  const setReplayInputRef = useReplayPreHydrationInput(isControlled ? externalChecked : defaultChecked,);
+  const eventHandlers = useCustomValidity(onValid, onInvalid, handleChange, onBlur, onFocus,);
   const attributes = isCanvas
     ? {
       checked: defaultChecked,
     }
+    : isControlled
+    ? {
+      checked: optimisticChecked,
+    }
     : {
       defaultChecked,
     };
-  const eventHandlers = useCustomValidity(onValid, props.onInvalid, props.onChange, props.onBlur, props.onFocus,);
+  const setInputRef = React42.useCallback((input) => {
+    setRef2(ref, input,);
+    setRef2(setReplayInputRef, input,);
+  }, [ref, setReplayInputRef,],);
   return /* @__PURE__ */ jsx(motion.input, {
     ...rest,
     ...attributes,
     ...eventHandlers,
     readOnly: isCanvas,
-    ref,
+    ref: setInputRef,
     type,
     name: inputName,
     className: cx(className, props.className,),
@@ -51089,7 +52513,7 @@ var styles2 = /* @__PURE__ */ (() => [
     borderWidth: css2.variable('--framer-input-focused-border-width', '--framer-input-boolean-checked-border-width', inputBorderAllSides,),
   },),
 ])();
-var FormBooleanInput = /* @__PURE__ */ withCSS(BooleanInput, styles2, 'framer-lib-form-boolean-input',);
+var FormBooleanInput2 = /* @__PURE__ */ withCSS(BooleanInput, styles2, 'framer-lib-form-boolean-input',);
 var Select = /* @__PURE__ */ React42.forwardRef(function Select2(props, measureRef,) {
   const {
     autoFocus,
@@ -51108,8 +52532,12 @@ var Select = /* @__PURE__ */ React42.forwardRef(function Select2(props, measureR
     onFocus,
     ...rest
   } = props;
-  const eventHandlers = useCustomValidity(onValid, onInvalid, onChange, onBlur, onFocus,);
   const isCanvas = useIsOnFramerCanvas();
+  const isControlled = !isCanvas && value !== void 0;
+  const externalValue = value ?? '';
+  const [optimisticValue, , handleChange,] = useOptimisticValue(externalValue, isControlled, onChange,);
+  const setSelectRef = useReplayPreHydrationInput(isControlled ? externalValue : defaultValue,);
+  const eventHandlers = useCustomValidity(onValid, onInvalid, handleChange, onBlur, onFocus,);
   if (hidden) {
     return /* @__PURE__ */ jsx(motion.input, {
       type: 'hidden',
@@ -51123,12 +52551,13 @@ var Select = /* @__PURE__ */ React42.forwardRef(function Select2(props, measureR
     className: cx(inputWrapperClassName, selectWrapperClassName, className2,),
     ...rest,
     children: /* @__PURE__ */ jsx(motion.select, {
+      ref: setSelectRef,
       name: inputName,
       autoFocus,
       required,
       className: inputClassName,
       defaultValue,
-      value,
+      value: isControlled ? optimisticValue : void 0,
       ...eventHandlers,
       children: selectOptions?.map((option, index,) => {
         switch (option.type) {
@@ -51144,6 +52573,8 @@ var Select = /* @__PURE__ */ React42.forwardRef(function Select2(props, measureR
                 children: option.title ?? option.value,
               }, index,)
             );
+          default:
+            return assertNever(option,);
         }
       },),
     }, isCanvas ? serializeDefaultValue(defaultValue,) : void 0,),
@@ -51206,9 +52637,9 @@ var styles3 = /* @__PURE__ */ (() => [
   },),
   css2(`.${selectWrapperClassName}::before`, {
     ...inputIconCSSDeclaration,
-    paddingLeft: `${iconSpacing}px`,
-    backgroundPosition: `${iconSpacing}px center`,
-    maskPosition: `${iconSpacing}px center`,
+    paddingLeft: `${rightIconSpacing}px`,
+    backgroundPosition: `${rightIconSpacing}px center`,
+    maskPosition: `${rightIconSpacing}px center`,
     backgroundImage: css2.variable('--framer-input-icon-image',/* IconBackgroundImage */
     ),
     maskImage: css2.variable('--framer-input-icon-mask-image', `url('${defaultSelectCaretMaskImage}')`,),
@@ -51286,11 +52717,6 @@ function getTotalVerticalPadding(lightbox,) {
 }
 function getTotalHorizontalPadding(lightbox,) {
   return getSidePadding(lightbox?.paddingLeft, lightbox?.padding,) + getSidePadding(lightbox?.paddingRight, lightbox?.padding,);
-}
-function useStableCallback2(callback,) {
-  const latest = useRef(callback,);
-  latest.current = callback;
-  return useCallback2((...args) => latest.current(...args,), [],);
 }
 function createImageWithSrcSet(lightbox, background,) {
   if (!lightbox || !background || !background.src) return background;
@@ -51412,7 +52838,7 @@ function withLightboxEffect(Component18,) {
       },);
     }, [lightbox, open, ref, ancestorTickerContext?.stop, isInTickerItem,],);
     const aspectRatio2 = openOverrides?.aspectRatio ?? 1;
-    const decode = useStableCallback2(() => {
+    const decode = useStableCallback(() => {
       if (!lightbox || !image || !image.src) return;
       const srcDecodePromise = decodePromiseRef.current?.[image.src];
       if (srcDecodePromise) return srcDecodePromise;
@@ -51876,7 +53302,7 @@ var RelativeDate = /* @__PURE__ */ memo2(function RelativeDate2({
 },) {
   const fallbackLocale = useLocaleCode();
   const locale = externalLocale || fallbackLocale;
-  const targetDate = new Date(dateString,);
+  const targetDate = dateString ? new Date(dateString,) : null;
   const [currentDate, setCurrentDate,] = useState(getCurrentDate,);
   const interval = dateFormat === 'second' ? 1e3 : 6e4;
   useEffect(() => {
@@ -51889,6 +53315,7 @@ var RelativeDate = /* @__PURE__ */ memo2(function RelativeDate2({
       clearInterval(timeout,);
     };
   }, [interval,],);
+  if (!isValidDate(targetDate,)) return null;
   const formattedDate = targetDate.toLocaleString(locale, {
     timeZone: 'UTC',
     dateStyle: 'long',
@@ -55556,8 +56983,8 @@ var package_default = {
     '@types/react': '18.2',
     '@types/react-dom': '18.2',
     '@types/yargs': '^17.0.33',
-    '@typescript-eslint/eslint-plugin': '^8.40.0',
-    '@typescript-eslint/parser': '^8.40.0',
+    '@typescript-eslint/eslint-plugin': '^8.55.0',
+    '@typescript-eslint/parser': '^8.55.0',
     chalk: '^4.1.2',
     eslint: '^8.57.1',
     'eslint-plugin-framer-studio': 'workspace:*',
@@ -55636,6 +57063,7 @@ export {
   AsyncMotionValueAnimation,
   attachSpring,
   attrEffect,
+  AutoBreakpointVariant,
   AutomaticLayoutIds,
   axisDeltaEquals,
   axisEquals,
@@ -55719,6 +57147,7 @@ export {
   createProjectionNode,
   createRenderBatcher,
   createScopedAnimate,
+  createTrigger,
   cssBackgroundSize,
   cssCollector,
   cubicBezier,
@@ -55737,6 +57166,7 @@ export {
   defaultOffset,
   defaultTransformValue,
   defaultValueTypes,
+  defineShader,
   degrees,
   degreesToRadians,
   delay,
@@ -55785,7 +57215,7 @@ export {
   FontSourceNames,
   fontStore,
   forceLayerBackingWithCSSProperties,
-  FormBooleanInput,
+  FormBooleanInput2 as FormBooleanInput,
   FormContainer,
   FormPlainTextInput2 as FormPlainTextInput,
   FormSelect,
@@ -55880,6 +57310,7 @@ export {
   isDragging,
   isEasingArray,
   isElementKeyboardAccessible,
+  isEmptyTrigger,
   isEqual,
   isFiniteNumber,
   isForcedMotionValue,
@@ -55899,6 +57330,7 @@ export {
   isOfAnnotatedType,
   isPrimaryPointer,
   isRelativeNumber,
+  isShaderConfig,
   isShallowEqualArray,
   isStaticRenderer,
   isStraightCurve,
@@ -56075,6 +57507,7 @@ export {
   setGlobalRenderEnvironment,
   setStyle,
   setTarget,
+  Shader,
   Shadow,
   sharedSVGManager,
   shouldOpenLinkInNewTab,
