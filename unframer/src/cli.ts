@@ -367,11 +367,11 @@ cli.command(
         } else {
             // Server API mode
             console.log('\nTo get your API key:')
-            console.log('  1. Open your Framer project')
+            console.log('  1. Open your Framer project at https://framer.com/projects')
             console.log('  2. Go to Project Settings > API')
             console.log('  3. Generate or copy your API key\n')
 
-            const apiKey = await password({ message: 'Enter Framer API key:' })
+            const apiKey = await password({ message: 'Enter Framer API key:', mask: '*' })
             if (!apiKey) {
                 console.error('API key is required')
                 process.exit(1)
@@ -497,10 +497,9 @@ async function registerServerApiCommands() {
             toolDef.description.split('\n')[0], // First line as short description
         )
 
-        // Add --project option for all server-api commands
         cmd.option(
             '--project <url>',
-            'Framer project URL (or set FRAMER_PROJECT_URL env var) only needed in Server API mode',
+            'Framer project URL. Uses server-api mode (framer-api headless). Works alongside plugin mode login, pass --project to switch to server-api for a single command. Also reads FRAMER_PROJECT_URL env var.',
         )
 
         // Add options based on tool input schema, using zod v4 native JSON Schema conversion
