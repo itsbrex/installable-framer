@@ -1,5 +1,38 @@
 # unframer
 
+## 4.1.0
+
+### Minor Changes
+
+- **Server API mode**: `unframer mcp login` now offers two authentication modes:
+
+  - **Plugin mode** (default): requires Framer open with the MCP plugin running — same as before
+  - **Server API mode**: headless, no browser needed — uses `framer-api` with a Framer API key
+
+  ```bash
+  unframer mcp login
+  # → select "Server API" → enter API key + project URL
+  ```
+
+  Once configured, all MCP tools work without Framer open. Pass `--project <url>` on any command to switch to server-api for a single invocation alongside plugin mode:
+
+  ```bash
+  unframer mcp getProjectXml --project https://framer.com/projects/MyProject--abc123
+  ```
+
+- **`UNFRAMER_MCP_URL` env var**: override the saved MCP URL without touching `~/.unframer/config.json`. Useful for CI/CD:
+
+  ```bash
+  UNFRAMER_MCP_URL="https://mcp.unframer.co/mcp?id=...&secret=..." unframer mcp getProjectXml
+  ```
+
+### Patch Changes
+
+- Migrated CLI framework from `@xmorse/cac` to `goke` (space-separated subcommands, standard schema coercion)
+- Removed `mcp skill` command — `unframer --help` now shows all MCP commands
+- API key prompt in login now shows `*` mask characters while typing
+- Updated to latest Framer runtime
+
 ## 4.0.5
 
 ### Patch Changes
