@@ -1,14 +1,14 @@
 {
     "name": "unframer",
-    "version": "4.1.0",
+    "version": "4.1.1",
     "type": "module",
     "description": "Import Framer components directly in your React app, type safe and customizable",
     "sideEffects": false,
     "repository": "https://github.com/remorses/unframer",
     "imports": {
         "#framer-client": {
-            "types": "./dist/framer-client.server.d.ts",
-            "default": "./dist/framer-client.server.js"
+            "types": "./src/plugin-mcp-dist/lib/framer-client.server.d.ts",
+            "default": "./src/plugin-mcp-dist/lib/framer-client.server.js"
         }
     },
     "scripts": {
@@ -71,6 +71,7 @@
         "@inquirer/prompts": "^8.2.0",
         "@modelcontextprotocol/sdk": "^1.25.3",
         "async-sema": "^3.1.1",
+        "diff": "^7.0.0",
         "esbuild": "^0.25.8",
         "zod": "^4",
         "esbuild-plugins-node-modules-polyfill": "^1.6.8",

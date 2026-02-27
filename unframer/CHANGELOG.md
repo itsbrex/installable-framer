@@ -1,5 +1,10 @@
 # unframer
 
+## 4.1.1
+
+1. **Fixed server-api mode crash on startup** — `mcp` server-api mode no longer throws `ERR_MODULE_NOT_FOUND` for `framer-plugin` when running headless (the handler module now correctly imports from the `framer-api` shim)
+2. **Updated bundled Framer runtime** — latest Framer internals including new Google font chunks
+
 ## 4.1.0
 
 ### Minor Changes
