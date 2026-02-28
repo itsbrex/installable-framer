@@ -15,6 +15,12 @@ export {
 
 export { Link, ResolveLinks }
 
+export { propCamelCaseJustLikeFramer } from './compat.js'
+export {
+    propControlsToTypedocComments,
+    componentCamelCase,
+} from './typescript.js'
+
 // Override withCSS with our custom implementation that restores style tags
 import { withCSS as withCSSOriginal } from './framer.js'
 import { withCSS } from './css.js'
