@@ -1,5 +1,9 @@
 # Unframer-specific Guidelines
 
+> **Editing instructions:** This file (`UNFRAMER_AGENTS.md`) is the source of truth for `AGENTS.md` in the unframer submodule. Edit this file, not `AGENTS.md` (generated) and not `CLAUDE.md` (deleted). Run `pnpm agents.md` from inside the `unframer/` directory to regenerate `AGENTS.md` after editing.
+
+This project is a CLI called `unframer` that downloads Framer website builder components as React component files.
+
 ## Running the CLI locally
 
 To run the unframer CLI locally during development, use the bin entry point (not cli.ts directly):
@@ -127,3 +131,20 @@ pnpm gen-unframer # copies esm/lib/ → ../unframer/unframer/src/plugin-mcp-dist
 The `pnpm pack` script in plugin-mcp automatically runs `build` + `gen-unframer` before creating the zip, so the unframer dist is always in sync when submitting for review.
 
 If you change mcp-handlers.ts or schema.ts, always run `pnpm gen-unframer` inside plugin-mcp to update the unframer copy.
+
+## Testing the framer exporting logic
+
+To test changes in the framer exporting logic:
+1. Run `pnpm --filter unframer build`
+2. Then run `pnpm --filter nextjs-app framer-simplicity` to generate the framer components
+3. Read the generated contents in `framer-simplicity/` to verify they are correct
+
+Note: these components can be very large files.
+
+## Logging
+
+The unframer folder uses a logger. When using the `.debug()` method, logs are only visible when passing `--debug` to the unframer CLI:
+
+```bash
+pnpm --filter nextjs-app framer-simplicity --debug
+```
