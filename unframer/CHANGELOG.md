@@ -1,5 +1,10 @@
 # unframer
 
+## 4.1.2
+
+1. **Fixed `unframer mcp` crash on Node 22** — server-api mode no longer throws `ERR_UNKNOWN_FILE_EXTENSION` at startup. The handler code previously imported from `unframer/src/typescript` and `unframer/src/compat` which resolve to raw `.ts` files that Node 22 refuses to load. These are now exported from the main `unframer` entry point.
+2. **Fixed missing runtime dependencies in server-api mode** — `htmlparser2`, `dom-serializer`, `camelcase`, and `sema4` are now declared as dependencies so they are available when `unframer mcp` runs handler code in-process.
+
 ## 4.1.1
 
 1. **Fixed server-api mode crash on startup** — `mcp` server-api mode no longer throws `ERR_MODULE_NOT_FOUND` for `framer-plugin` when running headless (the handler module now correctly imports from the `framer-api` shim)
