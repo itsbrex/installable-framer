@@ -12407,7 +12407,7 @@ function ReorderItemComponent({
 }
 var ReorderItem = /* @__PURE__ */ forwardRef(ReorderItemComponent,);
 
-// /:https://app.framerstatic.com/framer.EHXVWJCS.mjs
+// /:https://app.framerstatic.com/framer.UGRZ4X4S.mjs
 
 import React42 from 'react';
 import { startTransition as startTransition2, } from 'react';
@@ -49470,10 +49470,25 @@ var sandboxFallbackContainerStyle = {
 var ShaderSandboxFallbackImage = /* @__PURE__ */ memo2(function ShaderSandboxFallbackImage2({
   src,
   hidden = false,
+  onDisplaySrcChange,
 },) {
   const [displaySrc, setDisplaySrc,] = useState(src,);
   const [previousSrc, setPreviousSrc,] = useState(void 0,);
   const fadeRef = useRef(null,);
+  const onDisplaySrcChangeRef = useRef(onDisplaySrcChange,);
+  useLayoutEffect(() => {
+    onDisplaySrcChangeRef.current = onDisplaySrcChange;
+  }, [onDisplaySrcChange,],);
+  const isInitialMountRef = useRef(true,);
+  useLayoutEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+    if (!prevDisplayRef.current) {
+      onDisplaySrcChangeRef.current?.();
+    }
+  }, [displaySrc,],);
   useEffect(() => {
     if (src === displaySrc) return;
     let isActive = true;
@@ -49514,7 +49529,10 @@ var ShaderSandboxFallbackImage = /* @__PURE__ */ memo2(function ShaderSandboxFal
       fill: 'forwards',
     },);
     animation.onfinish = () => {
-      if (!cancelled) startTransition2(() => setPreviousSrc(void 0,));
+      if (!cancelled) {
+        startTransition2(() => setPreviousSrc(void 0,));
+        onDisplaySrcChangeRef.current?.();
+      }
     };
     return () => {
       cancelled = true;
@@ -49657,6 +49675,10 @@ function ShaderCanvas({
     onReadyRef.current = onReady;
   }, [onReady,],);
   const resolvedUniforms = useResolvedUniforms(uniforms,);
+  const uniformsPropRef = useRef(uniforms,);
+  useLayoutEffect(() => {
+    uniformsPropRef.current = uniforms;
+  }, [uniforms,],);
   const resolvedUniformsRef = useRef(resolvedUniforms,);
   useLayoutEffect(() => {
     resolvedUniformsRef.current = resolvedUniforms;
@@ -49669,6 +49691,7 @@ function ShaderCanvas({
   useLayoutEffect(() => {
     pausedRef.current = paused;
   }, [paused,],);
+  const readySignalledRef = useRef(false,);
   const animate3 = useCallback2((time2) => {
     const renderer = rendererRef.current;
     if (!renderer) return;
@@ -49685,6 +49708,14 @@ function ShaderCanvas({
       lastTimeRef.current = currentTime;
       renderer.render(elapsedTime, deltaTime, resolvedUniformsRef.current,);
     }
+    if (!readySignalledRef.current) {
+      const hasCustomUniforms = uniformsPropRef.current && Object.keys(uniformsPropRef.current,).length > 0;
+      const hasResolvedUniforms = Object.keys(resolvedUniformsRef.current,).length > 0;
+      if (!hasCustomUniforms || hasResolvedUniforms) {
+        readySignalledRef.current = true;
+        onReadyRef.current?.();
+      }
+    }
     if (animatedRef.current || pausedRef.current) {
       animationFrameRef.current = requestAnimationFrame(animate3,);
     }
@@ -49692,7 +49723,7 @@ function ShaderCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let cancelled = false;
+    readySignalledRef.current = false;
     try {
       const renderer = new WebGL2ShaderRenderer(canvas, vertexShader, fragmentShader, resolveResolutionScale(resolutionScale,),);
       rendererRef.current = renderer;
@@ -49700,16 +49731,12 @@ function ShaderCanvas({
       startTimeRef.current = performance.now() * timeMultiplier;
       lastTimeRef.current = startTimeRef.current;
       animationFrameRef.current = requestAnimationFrame(animate3,);
-      requestAnimationFrame(() => {
-        if (!cancelled) onReadyRef.current?.();
-      },);
     } catch (error) {
       if (onError && error instanceof Error) {
         onError(error,);
       }
     }
     return () => {
-      cancelled = true;
       cancelAnimationFrame(animationFrameRef.current,);
       rendererRef.current?.dispose();
       rendererRef.current = null;
@@ -49724,7 +49751,7 @@ function ShaderCanvas({
   }, [animated, animate3,],);
   const wasPausedRef = useRef(paused,);
   useLayoutEffect(() => {
-    if (wasPausedRef.current && !paused) {
+    if (wasPausedRef.current !== paused) {
       startTimeRef.current = performance.now() * timeMultiplier;
       lastTimeRef.current = startTimeRef.current;
     }
@@ -49734,13 +49761,18 @@ function ShaderCanvas({
     const renderer = rendererRef.current;
     if (!renderer) return;
     renderer.resize();
-    const {
-      currentTime,
-      elapsedTime,
-      deltaTime,
-    } = getShaderTiming(performance.now(), startTimeRef.current, lastTimeRef.current,);
-    lastTimeRef.current = currentTime;
-    renderer.render(elapsedTime, deltaTime, resolvedUniformsRef.current,);
+    if (pausedRef.current) {
+      const elapsedTime = lastTimeRef.current - startTimeRef.current;
+      renderer.render(elapsedTime, 0, resolvedUniformsRef.current,);
+    } else {
+      const {
+        currentTime,
+        elapsedTime,
+        deltaTime,
+      } = getShaderTiming(performance.now(), startTimeRef.current, lastTimeRef.current,);
+      lastTimeRef.current = currentTime;
+      renderer.render(elapsedTime, deltaTime, resolvedUniformsRef.current,);
+    }
   }, [],);
   useCanvasResize(canvasRef, handleResize,);
   return /* @__PURE__ */ jsx('canvas', {
@@ -49752,7 +49784,6 @@ var SHADER_PLAY_DELAY = 250;
 var ShaderWithFallbackOverlay = /* @__PURE__ */ memo2(function ShaderWithFallbackOverlay2({
   mode,
   fallbackImage,
-  optimiseSwitching,
   vertexShader,
   fragmentShader,
   animated,
@@ -49760,6 +49791,7 @@ var ShaderWithFallbackOverlay = /* @__PURE__ */ memo2(function ShaderWithFallbac
   uniforms,
   onError,
   onReady,
+  paused: externalPaused,
 },) {
   const isProgressive = mode === 'progressive';
   const isIdle = useWhenBrowserIdle(isProgressive,);
@@ -49785,7 +49817,7 @@ var ShaderWithFallbackOverlay = /* @__PURE__ */ memo2(function ShaderWithFallbac
     }
     return () => SHADER_PLAY_DELAY ? clearTimeout(timeout,) : void 0;
   }, [isProgressive, isShaderReady,],);
-  const paused = isProgressive && !shouldPlay;
+  const paused = isProgressive && !shouldPlay || externalPaused;
   return /* @__PURE__ */ jsxs(Fragment, {
     children: [
       isIdle && /* @__PURE__ */ jsx(ShaderCanvas, {
@@ -49800,13 +49832,9 @@ var ShaderWithFallbackOverlay = /* @__PURE__ */ memo2(function ShaderWithFallbac
       },),
       !isShaderReady && fallbackImage && /* @__PURE__ */ jsx('div', {
         style: overlayStyle,
-        children: optimiseSwitching
-          ? /* @__PURE__ */ jsx(ShaderSandboxFallbackImage, {
-            src: fallbackImage,
-          },)
-          : /* @__PURE__ */ jsx(ShaderFallbackImage, {
-            src: fallbackImage,
-          },),
+        children: /* @__PURE__ */ jsx(ShaderFallbackImage, {
+          src: fallbackImage,
+        },),
       },),
     ],
   },);
@@ -49825,6 +49853,8 @@ var Shader = /* @__PURE__ */ forwardRef(function Shader2({
   onError,
   onReady,
   resolutionScale,
+  paused,
+  onFallbackDisplayChange,
   ...rest
 }, ref,) {
   const observerRef = useObserverRef(ref,);
@@ -49845,6 +49875,7 @@ var Shader = /* @__PURE__ */ forwardRef(function Shader2({
     uniforms,
     resolutionScale,
     onError,
+    paused,
   };
   const [isShaderReady, setIsShaderReady,] = useState(false,);
   useLayoutEffect(() => {
@@ -49876,6 +49907,7 @@ var Shader = /* @__PURE__ */ forwardRef(function Shader2({
           /* @__PURE__ */ jsx(ShaderSandboxFallbackImage, {
             src: fallbackImage,
             hidden: hideFallback,
+            onDisplaySrcChange: onFallbackDisplayChange,
           },),
         ],
       },)
