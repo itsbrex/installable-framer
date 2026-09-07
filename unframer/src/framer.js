@@ -13502,7 +13502,7 @@ function ReorderItemComponent({
 }
 var ReorderItem = /* @__PURE__ */ forwardRef(ReorderItemComponent,);
 
-// /:https://app.framerstatic.com/framer.FA4L5YJY.mjs
+// /:https://app.framerstatic.com/framer.NNV2MXZK.mjs
 
 import React42 from 'react';
 import { startTransition as startTransition2, useDeferredValue, useSyncExternalStore, } from 'react';
@@ -14806,6 +14806,7 @@ function useCurrentRoute() {
   const override = useContext(CurrentRouteContext,);
   const id3 = override?.routeId ?? router.currentRouteId;
   const pathVariables = override?.routeId ? override.pathVariables : router.currentPathVariables;
+  const canonicalPathVariables = override?.routeId ? void 0 : router.currentCanonicalPathVariables;
   const route = id3 ? router.getRoute?.(id3,) : void 0;
   return useMemo(() => {
     if (!id3 || !route) return void 0;
@@ -14813,8 +14814,9 @@ function useCurrentRoute() {
       ...route,
       id: id3,
       pathVariables,
+      canonicalPathVariables,
     };
-  }, [id3, pathVariables, route,],);
+  }, [canonicalPathVariables, id3, pathVariables, route,],);
 }
 function useCurrentRouteKey() {
   const currentRoute = useCurrentRoute();
@@ -15817,7 +15819,7 @@ function makeHandoverKey(method, collectionId, localeKey, id3,) {
   return `${method}|${collectionId}|${localeKey}|${id3}`;
 }
 var utilsCache = /* @__PURE__ */ new WeakMap();
-function getCollectionUtilsCache(collectionUtils,) {
+function createCollectionUtilsCache(collectionUtils,) {
   return (collectionId) => {
     if (!collectionUtils) return;
     const utilsFactory = collectionUtils[collectionId];
@@ -15835,7 +15837,7 @@ function CollectionUtilsCacheProvider({
 },) {
   const getCollectionUtilsCacheMemoized = useMemo(() => {
     return {
-      get: getCollectionUtilsCache(collectionUtils,),
+      get: createCollectionUtilsCache(collectionUtils,),
     };
   }, [collectionUtils,],);
   return /* @__PURE__ */ jsx(CollectionUtilsCacheContext.Provider, {
@@ -15894,7 +15896,7 @@ var CollectionUtilsCache = class {
     const utilsIsPromise = isPromise(maybeUtils,);
     let maybeResult;
     try {
-      maybeResult = utilsIsPromise ? maybeUtils.then((utils) => utils?.[method](id3, locale,)) : maybeUtils?.[method](id3, locale,);
+      maybeResult = utilsIsPromise ? maybeUtils.then((utils) => utils?.[method]?.(id3, locale,)) : maybeUtils?.[method]?.(id3, locale,);
     } catch (error) {
       console.error(getPleaseReportMessage('Failed to call CollectionUtils method.', error,),);
       maybeResult = void 0;
@@ -15906,17 +15908,18 @@ var CollectionUtilsCache = class {
       this.cacheMap.set(entryKey, maybeResult,);
       return;
     }
-    const lazyValue = new LazyValue(() =>
-      maybeResult.then((result) => {
+    const lazyValue = new LazyValue(async () => {
+      try {
+        const result = isPromise(maybeResult,) ? await maybeResult : maybeResult;
         if (handoverCollector !== void 0) {
           handoverCollector.set(handoverDataType, entryKey, result,);
         }
         return result;
-      },).catch((error) => {
+      } catch (error) {
         console.error(getPleaseReportMessage('Failed to call CollectionUtils method.', error,),);
         return void 0;
-      },)
-    );
+      }
+    },);
     this.cacheMap.set(entryKey, lazyValue,);
     return lazyValue.readMaybeAsync();
   }
@@ -15925,6 +15928,9 @@ var CollectionUtilsCache = class {
   }
   getRecordIdBySlug(slug, locale,) {
     return this.callUtilsMethod('getRecordIdBySlug', slug, locale,);
+  }
+  getContentLocaleIdByRecordId(recordId, locale,) {
+    return this.callUtilsMethod('getContentLocaleIdByRecordId', recordId, locale,);
   }
 };
 function delay2(ms,) {
@@ -16076,6 +16082,7 @@ function isCommandKeyPressed(event,) {
   return isAppleDevice() ? event.metaKey : event.ctrlKey;
 }
 function noop3() {}
+async function noopAsync() {}
 var YIELD_TARGET_FREQUENTLY = /* @__PURE__ */ (() => 1e3 / 60)();
 var YIELD_TARGET_INFREQUENTLY = /* @__PURE__ */ (() => 1e3 / 25)();
 var HIDDEN_TAB_YIELD_TARGET = /* @__PURE__ */ (() => 500)();
@@ -16231,93 +16238,6 @@ var scheduleFrameRead = (callback) => {
   );
 };
 var yieldToMain = /* @__PURE__ */ createYieldToMain(scheduleFrameRead,);
-var shouldPreloadBasedOnUA = !isBot;
-function usePreloadRoute() {
-  const collectionUtils = useCollectionUtils();
-  const {
-    getRoute,
-  } = useRouter();
-  return useCallback2((routeId, linkContext, options,) => {
-    if (!routeId || !getRoute) return;
-    const route = getRoute(routeId,);
-    const {
-      pathVariables,
-      locale,
-    } = linkContext;
-    return preloadRoute(route, {
-      routeId,
-      pathVariables,
-      locale,
-      collectionUtils,
-    }, options,);
-  }, [getRoute, collectionUtils,],);
-}
-function useRoutePreloader(routeIds, enabled = true,) {
-  const preload = usePreloadRoute();
-  useEffect(() => {
-    if (!enabled || !shouldPreloadBasedOnUA) return;
-    for (const routeId of routeIds) {
-      void preload(routeId, {},);
-    }
-  }, [routeIds, enabled, preload,],);
-}
-async function preloadRoute(route, context, options = {},) {
-  if (!shouldPreloadBasedOnUA || !route) return;
-  const {
-    priority = 'background',
-    yieldBeforePreload = true,
-    shouldLoadRouteData = true,
-  } = options;
-  const component = route.page;
-  if (!component || !isLazyComponentType(component,)) return;
-  if (yieldBeforePreload) {
-    await yieldToMain({
-      priority,
-    },);
-  }
-  try {
-    const loadedComponent = await component.preload();
-    if (shouldLoadRouteData && context && loadedComponent) {
-      await loadRouteData(loadedComponent, context, priority,);
-    }
-  } catch (e) {
-    if (false) console.warn('Preload failed', route, e,);
-  }
-}
-async function loadRouteData(component, context, priority,) {
-  const loader = component.loader;
-  if (!loader?.load) return;
-  const loaderContext = {
-    signal: context.signal ?? new AbortController().signal,
-    pathVariables: context.pathVariables ?? {},
-    routeId: context.routeId,
-    locale: context.locale,
-    priority,
-    collectionUtils: context.collectionUtils,
-  };
-  try {
-    await loader.load({}, loaderContext,);
-  } catch (e) {
-    if (false) console.warn('Route data preload failed', e,);
-  }
-}
-function useRouteHandler(routeId, preload = false, elementId,) {
-  const {
-    navigate,
-  } = useRouter();
-  useRoutePreloader([routeId,], preload,);
-  const handler = React42.useCallback(() => navigate?.(routeId, elementId,), [navigate, elementId, routeId,],);
-  return handler;
-}
-var pathVariablesRegExpRaw = ':([a-z]\\w*)';
-var pathVariablesRegExpGlobal = /* @__PURE__ */ new RegExp(pathVariablesRegExpRaw, 'gi',);
-function fillPathVariables(path, variables,) {
-  return path.replace(pathVariablesRegExpGlobal, (match, name,) => {
-    const value = variables[name];
-    if (typeof value !== 'string' || value.length === 0) return match;
-    return encodeURIComponent(value,);
-  },);
-}
 function forwardCurrentQueryParams(href, ignoreBackAnchor = false,) {
   let queryParamsString = '';
   if (typeof __unframerWindow2 !== 'undefined') {
@@ -16358,6 +16278,8 @@ function forwardQueryParams(queryParamsString, href,) {
   }
   return baseUrl + '?' + newSearchString + hash2;
 }
+var pathVariablesRegExpRaw = ':([a-z]\\w*)';
+var pathVariablesRegExpGlobal = /* @__PURE__ */ new RegExp(pathVariablesRegExpRaw, 'gi',);
 async function replacePathVariables(path, currentLocale, nextLocale, defaultLocale, collectionId, pathVariables, collectionUtils,) {
   let resultPath = path;
   let isMissingInLocale = false;
@@ -16463,6 +16385,311 @@ async function getLocalizedNavigationPath({
     result.path = forwardCurrentQueryParams(result.path, true,);
   }
   return result;
+}
+async function getCollectionItemContentLocaleId({
+  activeLocale,
+  collectionUtils,
+  currentRoute,
+  pathVariables,
+},) {
+  if (!activeLocale || activeLocale.id === defaultLocaleId) return;
+  const collectionId = currentRoute?.collectionId;
+  if (!collectionId) return;
+  const utils = collectionUtils?.get(collectionId,);
+  if (!utils?.getContentLocaleIdByRecordId) return;
+  if (!pathVariables || !currentRoute?.path) return;
+  const matches = Array.from(currentRoute.path.matchAll(pathVariablesRegExpGlobal,),);
+  const lastMatch = matches.at(-1,);
+  const pathVariableValue = lastMatch?.[1];
+  if (!pathVariableValue) return;
+  const currentSlug = pathVariables[pathVariableValue];
+  if (!isString(currentSlug,)) return;
+  const maybeRecordId = utils.getRecordIdBySlug(currentSlug, activeLocale,);
+  const recordId = isPromise(maybeRecordId,) ? await maybeRecordId : maybeRecordId;
+  if (!recordId) return;
+  return utils.getContentLocaleIdByRecordId(recordId, activeLocale,);
+}
+async function resolveRouteContentState({
+  activeLocale,
+  defaultLocale,
+  collectionUtilsCache,
+  locales,
+  pathVariables,
+  route,
+  routeId,
+},) {
+  if (!activeLocale || !route) return {};
+  const collectionContentLocaleId = await getCollectionItemContentLocaleId({
+    activeLocale,
+    collectionUtils: collectionUtilsCache,
+    currentRoute: route,
+    pathVariables,
+  },);
+  const contentLocaleId = collectionContentLocaleId ?? route.canonicalLocaleIdByLocaleId?.[activeLocale.id];
+  const contentLocale = contentLocaleId
+    ? locales.find(({
+      id: id3,
+    },) => id3 === contentLocaleId)
+    : void 0;
+  if (!contentLocale || contentLocale.id === activeLocale.id) {
+    return {
+      contentLocaleId,
+    };
+  }
+  const {
+    pathVariables: canonicalPathVariables,
+  } = await getLocalizedNavigationPath({
+    currentLocale: activeLocale,
+    nextLocale: contentLocale,
+    defaultLocale,
+    route,
+    routeId,
+    pathVariables,
+    collectionUtils: collectionUtilsCache,
+    preserveQueryParams: false,
+  },);
+  return !isEqual(canonicalPathVariables ?? {}, pathVariables ?? {}, false,)
+    ? {
+      contentLocaleId,
+      canonicalPathVariables,
+    }
+    : {
+      contentLocaleId,
+    };
+}
+async function getLocalesForCurrentRoute(activeLocale, locales, currentRoute, pathVariables, collectionUtils,) {
+  if (!currentRoute) return locales;
+  const slugByLocaleIfCollectionPage = await getSlugByLocaleIfCollectionPage(
+    activeLocale,
+    locales,
+    currentRoute,
+    pathVariables,
+    collectionUtils,
+  );
+  const includedLocalesForCurrentRoute = currentRoute.includedLocales;
+  const localesForCurrentRoute = [];
+  for (const locale of locales) {
+    if (includedLocalesForCurrentRoute) {
+      if (!includedLocalesForCurrentRoute.includes(locale.id,)) continue;
+    }
+    if (slugByLocaleIfCollectionPage) {
+      const hasSlug = slugByLocaleIfCollectionPage.has(locale.id,);
+      if (!hasSlug) continue;
+    }
+    localesForCurrentRoute.push(locale,);
+  }
+  return localesForCurrentRoute;
+}
+async function getSlugByLocaleIfCollectionPage(activeLocale, locales, currentRoute, pathVariables, collectionUtils,) {
+  const {
+    collectionId,
+  } = currentRoute;
+  if (!collectionId) return null;
+  if (!activeLocale) return null;
+  if (!pathVariables) return null;
+  const {
+    path,
+  } = currentRoute;
+  if (!path) return null;
+  const matches = Array.from(path.matchAll(pathVariablesRegExpGlobal,),);
+  const lastMatch = matches.pop();
+  if (!lastMatch) return null;
+  const pathVariableWithDelimiter = lastMatch?.[0];
+  const pathVariableValue = lastMatch?.[1];
+  if (!pathVariableWithDelimiter || !pathVariableValue) {
+    throw new Error('Failed to replace path variables: unexpected regex match group',);
+  }
+  const currentSlug = pathVariables[pathVariableValue];
+  if (!currentSlug || !isString(currentSlug,)) {
+    throw new Error(`No slug found for path variable ${pathVariableValue}`,);
+  }
+  const utils = collectionUtils?.get(collectionId,);
+  if (!utils) return null;
+  const maybeRecordId = utils.getRecordIdBySlug(currentSlug, activeLocale,);
+  const recordId = isPromise(maybeRecordId,) ? await maybeRecordId : maybeRecordId;
+  if (!recordId) return null;
+  const slugById = /* @__PURE__ */ new Map();
+  await Promise.all(locales.map(async (locale) => {
+    const maybeSlug = utils.getSlugByRecordId(recordId, locale,);
+    const slug = isPromise(maybeSlug,) ? await maybeSlug : maybeSlug;
+    if (!slug) return;
+    slugById.set(locale.id, slug,);
+  },),);
+  return slugById;
+}
+var noopAsync2 = async () => {};
+var defaultLocaleInfo = {
+  contentLocale: null,
+  activeLocale: null,
+  locales: [],
+  setLocale: noopAsync2,
+};
+var LocaleInfoContext = /* @__PURE__ */ (() => {
+  const Context2 = React42.createContext(defaultLocaleInfo,);
+  Context2.displayName = 'LocaleInfoContext';
+  return Context2;
+})();
+function useLocaleInfo() {
+  return React42.useContext(LocaleInfoContext,);
+}
+function useLocalesForCurrentRoute() {
+  const {
+    currentRouteId,
+    routes,
+    currentPathVariables,
+  } = useRouter();
+  const {
+    activeLocale,
+    locales,
+  } = useLocaleInfo();
+  const [localesForCurrentRoute, setLocalesForCurrentRoute,] = React42.useState(() => activeLocale ? [activeLocale,] : []);
+  const currentRoute = currentRouteId ? routes?.[currentRouteId] : void 0;
+  const collectionUtils = useCollectionUtils();
+  React42.useEffect(() => {
+    let active = true;
+    getLocalesForCurrentRoute(activeLocale, locales, currentRoute, currentPathVariables, collectionUtils,).then((localesSubset) => {
+      if (!active) return;
+      React42.startTransition(() => {
+        if (localesSubset) {
+          setLocalesForCurrentRoute(localesSubset,);
+        } else {
+          setLocalesForCurrentRoute(activeLocale ? [activeLocale,] : [],);
+        }
+      },);
+    },).catch(() => {},);
+    return () => {
+      active = false;
+    };
+  }, [activeLocale, locales, collectionUtils, currentRoute, currentPathVariables,],);
+  return localesForCurrentRoute;
+}
+function useLocalizationInfo() {
+  const {
+    activeLocale,
+    locales,
+    setLocale,
+  } = useLocaleInfo();
+  return {
+    activeLocalization: activeLocale,
+    localizations: locales,
+    setLocalization: setLocale,
+  };
+}
+function useLocaleCode() {
+  return useLocaleInfo().activeLocale?.code ?? 'en-US';
+}
+function useLocale() {
+  return useLocaleCode();
+}
+var LayoutDirectionContext = /* @__PURE__ */ (() => {
+  const Context2 = React42.createContext('ltr',);
+  Context2.displayName = 'LayoutDirectionContext';
+  return Context2;
+})();
+function useLayoutDirection() {
+  return React42.useContext(LayoutDirectionContext,);
+}
+var shouldPreloadBasedOnUA = !isBot;
+function usePreloadRoute() {
+  const collectionUtils = useCollectionUtils();
+  const {
+    getRoute,
+  } = useRouter();
+  const {
+    activeLocale,
+    locales,
+  } = useLocaleInfo();
+  return useCallback2((routeId, linkContext, options,) => {
+    if (!routeId || !getRoute) return;
+    const route = getRoute(routeId,);
+    const {
+      pathVariables,
+    } = linkContext;
+    const locale = linkContext.locale ?? activeLocale ?? void 0;
+    return preloadRoute(route, {
+      routeId,
+      pathVariables,
+      locale,
+      locales,
+      collectionUtils,
+    }, options,);
+  }, [getRoute, collectionUtils, activeLocale, locales,],);
+}
+function useRoutePreloader(routeIds, enabled = true,) {
+  const preload = usePreloadRoute();
+  useEffect(() => {
+    if (!enabled || !shouldPreloadBasedOnUA) return;
+    for (const routeId of routeIds) {
+      void preload(routeId, {},);
+    }
+  }, [routeIds, enabled, preload,],);
+}
+async function preloadRoute(route, context, options = {},) {
+  if (!shouldPreloadBasedOnUA || !route) return;
+  const {
+    priority = 'background',
+    yieldBeforePreload = true,
+    shouldLoadRouteData = true,
+  } = options;
+  const component = route.page;
+  if (!component || !isLazyComponentType(component,)) return;
+  if (yieldBeforePreload) {
+    await yieldToMain({
+      priority,
+    },);
+  }
+  try {
+    const loadedComponent = await component.preload();
+    if (shouldLoadRouteData && context && loadedComponent) {
+      await loadRouteData(loadedComponent, route, context, priority,);
+    }
+  } catch (e) {
+    if (false) console.warn('Preload failed', route, e,);
+  }
+}
+async function loadRouteData(component, route, context, priority,) {
+  const loader = component.loader;
+  if (!loader?.load) return;
+  const {
+    canonicalPathVariables,
+  } = await resolveRouteContentState({
+    activeLocale: context.locale ?? null,
+    defaultLocale: context.locales?.find((locale) => locale.id === defaultLocaleId),
+    collectionUtilsCache: context.collectionUtils,
+    locales: context.locales ?? [],
+    pathVariables: context.pathVariables,
+    route,
+    routeId: context.routeId,
+  },);
+  const loaderContext = {
+    signal: context.signal ?? new AbortController().signal,
+    pathVariables: context.pathVariables ?? {},
+    canonicalPathVariables,
+    routeId: context.routeId,
+    locale: context.locale,
+    priority,
+    collectionUtils: context.collectionUtils,
+  };
+  try {
+    await loader.load({}, loaderContext,);
+  } catch (e) {
+    if (false) console.warn('Route data preload failed', e,);
+  }
+}
+function useRouteHandler(routeId, preload = false, elementId,) {
+  const {
+    navigate,
+  } = useRouter();
+  useRoutePreloader([routeId,], preload,);
+  const handler = React42.useCallback(() => navigate?.(routeId, elementId,), [navigate, elementId, routeId,],);
+  return handler;
+}
+function fillPathVariables(path, variables,) {
+  return path.replace(pathVariablesRegExpGlobal, (match, name,) => {
+    const value = variables[name];
+    if (typeof value !== 'string' || value.length === 0) return match;
+    return encodeURIComponent(value,);
+  },);
 }
 var bugExistenceChecked = false;
 function logIfPopstateCalledSynchronously() {
@@ -17142,6 +17369,8 @@ function useReplaceInitialState({
   routeId,
   initialPathVariables,
   initialLocaleId,
+  initialContentLocaleId,
+  initialCanonicalPathVariables,
 },) {
   useLayoutEffect(() => {
     if (disabled) return;
@@ -17154,6 +17383,8 @@ function useReplaceInitialState({
       hash: initialHash,
       pathVariables: initialPathVariables,
       localeId: initialLocaleId,
+      contentLocaleId: initialContentLocaleId,
+      canonicalPathVariables: initialCanonicalPathVariables,
     },);
   }, [],);
 }
@@ -17190,6 +17421,8 @@ function usePopStateHandler(scrollRestoration, currentRouteId, setCurrentRouteId
       hash: hash2,
       pathVariables,
       localeId,
+      contentLocaleId,
+      canonicalPathVariables,
     } = state;
     const resolvedHash = isString(hash2,) ? hash2 : __unframerWindow2.location.hash ? __unframerWindow2.location.hash.slice(1,) : void 0;
     let didStartRouteChange = false;
@@ -17201,6 +17434,8 @@ function usePopStateHandler(scrollRestoration, currentRouteId, setCurrentRouteId
         resolvedHash,
         __unframerWindow2.location.pathname + __unframerWindow2.location.search + __unframerWindow2.location.hash,
         isObject2(pathVariables,) ? pathVariables : void 0,
+        contentLocaleId,
+        canonicalPathVariables,
         true,
         nextRender,
         false,
@@ -17253,10 +17488,10 @@ function usePopStateHandler(scrollRestoration, currentRouteId, setCurrentRouteId
     };
   }, [popStateHandler, traversalHandler,],);
 }
-async function handleRedirectForMissingSlugs(route, pathVariables, nextLocale,) {
+async function handleRedirectForMissingSlugs(route, pathVariables, nextLocale, sitePrefix,) {
   if (!route.path) return false;
   if (!pathVariables) return false;
-  const nextLocaleWithDefaultSlugPath = prependLocaleSlug(fillPathVariables(route.path, pathVariables,), nextLocale.slug,);
+  const nextLocaleWithDefaultSlugPath = sitePrefix + prependLocaleSlug(fillPathVariables(route.path, pathVariables,), nextLocale.slug,);
   const response = await fetch(nextLocaleWithDefaultSlugPath, {
     method: 'HEAD',
     redirect: 'manual',
@@ -17277,7 +17512,10 @@ function useSwitchLocale() {
     },);
   }, [collectionUtils,],);
 }
-async function switchLocale(options,) {
+async function switchLocale({
+  sitePrefix,
+  ...options
+},) {
   const result = await getLocalizedNavigationPath(options,);
   if (!result) return;
   try {
@@ -17288,7 +17526,7 @@ async function switchLocale(options,) {
       throw new Error('Expected result.path to be a string',);
     }
     if (result.isMissingInLocale) {
-      const hasRedirect = await handleRedirectForMissingSlugs(options.route, result.pathVariables, options.nextLocale,);
+      const hasRedirect = await handleRedirectForMissingSlugs(options.route, result.pathVariables, options.nextLocale, sitePrefix,);
       if (hasRedirect) return;
     }
   } catch {}
@@ -17416,138 +17654,6 @@ function useMemoOne(factory, inputs,) {
 }
 function useCallbackOne(callback, inputs,) {
   return useMemoOne(() => callback, inputs,);
-}
-async function getLocalesForCurrentRoute(activeLocale, locales, currentRoute, pathVariables, collectionUtils,) {
-  if (!currentRoute) return locales;
-  const slugByLocaleIfCollectionPage = await getSlugByLocaleIfCollectionPage(
-    activeLocale,
-    locales,
-    currentRoute,
-    pathVariables,
-    collectionUtils,
-  );
-  const includedLocalesForCurrentRoute = currentRoute.includedLocales;
-  const localesForCurrentRoute = [];
-  for (const locale of locales) {
-    if (includedLocalesForCurrentRoute) {
-      if (!includedLocalesForCurrentRoute.includes(locale.id,)) continue;
-    }
-    if (slugByLocaleIfCollectionPage) {
-      const hasSlug = slugByLocaleIfCollectionPage.has(locale.id,);
-      if (!hasSlug) continue;
-    }
-    localesForCurrentRoute.push(locale,);
-  }
-  return localesForCurrentRoute;
-}
-async function getSlugByLocaleIfCollectionPage(activeLocale, locales, currentRoute, pathVariables, collectionUtils,) {
-  const {
-    collectionId,
-  } = currentRoute;
-  if (!collectionId) return null;
-  if (!activeLocale) return null;
-  if (!pathVariables) return null;
-  const {
-    path,
-  } = currentRoute;
-  if (!path) return null;
-  const matches = Array.from(path.matchAll(pathVariablesRegExpGlobal,),);
-  const lastMatch = matches.pop();
-  if (!lastMatch) return null;
-  const pathVariableWithDelimiter = lastMatch?.[0];
-  const pathVariableValue = lastMatch?.[1];
-  if (!pathVariableWithDelimiter || !pathVariableValue) {
-    throw new Error('Failed to replace path variables: unexpected regex match group',);
-  }
-  const currentSlug = pathVariables[pathVariableValue];
-  if (!currentSlug || !isString(currentSlug,)) {
-    throw new Error(`No slug found for path variable ${pathVariableValue}`,);
-  }
-  const utils = collectionUtils?.get(collectionId,);
-  if (!utils) return null;
-  const maybeRecordId = utils.getRecordIdBySlug(currentSlug, activeLocale,);
-  const recordId = isPromise(maybeRecordId,) ? await maybeRecordId : maybeRecordId;
-  if (!recordId) return null;
-  const slugById = /* @__PURE__ */ new Map();
-  await Promise.all(locales.map(async (locale) => {
-    const maybeSlug = utils.getSlugByRecordId(recordId, locale,);
-    const slug = isPromise(maybeSlug,) ? await maybeSlug : maybeSlug;
-    if (!slug) return;
-    slugById.set(locale.id, slug,);
-  },),);
-  return slugById;
-}
-var noopAsync = async () => {};
-var defaultLocaleInfo = {
-  contentLocale: null,
-  activeLocale: null,
-  locales: [],
-  setLocale: noopAsync,
-};
-var LocaleInfoContext = /* @__PURE__ */ (() => {
-  const Context2 = React42.createContext(defaultLocaleInfo,);
-  Context2.displayName = 'LocaleInfoContext';
-  return Context2;
-})();
-function useLocaleInfo() {
-  return React42.useContext(LocaleInfoContext,);
-}
-function useLocalesForCurrentRoute() {
-  const {
-    currentRouteId,
-    routes,
-    currentPathVariables,
-  } = useRouter();
-  const {
-    activeLocale,
-    locales,
-  } = useLocaleInfo();
-  const [localesForCurrentRoute, setLocalesForCurrentRoute,] = React42.useState(() => activeLocale ? [activeLocale,] : []);
-  const currentRoute = currentRouteId ? routes?.[currentRouteId] : void 0;
-  const collectionUtils = useCollectionUtils();
-  React42.useEffect(() => {
-    let active = true;
-    getLocalesForCurrentRoute(activeLocale, locales, currentRoute, currentPathVariables, collectionUtils,).then((localesSubset) => {
-      if (!active) return;
-      React42.startTransition(() => {
-        if (localesSubset) {
-          setLocalesForCurrentRoute(localesSubset,);
-        } else {
-          setLocalesForCurrentRoute(activeLocale ? [activeLocale,] : [],);
-        }
-      },);
-    },).catch(() => {},);
-    return () => {
-      active = false;
-    };
-  }, [activeLocale, locales, collectionUtils, currentRoute, currentPathVariables,],);
-  return localesForCurrentRoute;
-}
-function useLocalizationInfo() {
-  const {
-    activeLocale,
-    locales,
-    setLocale,
-  } = useLocaleInfo();
-  return {
-    activeLocalization: activeLocale,
-    localizations: locales,
-    setLocalization: setLocale,
-  };
-}
-function useLocaleCode() {
-  return useLocaleInfo().activeLocale?.code ?? 'en-US';
-}
-function useLocale() {
-  return useLocaleCode();
-}
-var LayoutDirectionContext = /* @__PURE__ */ (() => {
-  const Context2 = React42.createContext('ltr',);
-  Context2.displayName = 'LayoutDirectionContext';
-  return Context2;
-})();
-function useLayoutDirection() {
-  return React42.useContext(LayoutDirectionContext,);
 }
 var urlSearchStringSubscribers = /* @__PURE__ */ new Set();
 function getURLSearchStringSnapshot() {
@@ -17846,12 +17952,12 @@ function useCollectionReferenceQueryParam({
   },);
   const id3 = useMemo(() => {
     if (!isString(slug,)) return initialValueRef.current;
-    const cache2 = getCollectionUtilsCache2(collectionUtils, collectionId,);
+    const cache2 = getCollectionUtilsCache(collectionUtils, collectionId,);
     return use(cache2.getRecordIdBySlug(slug, locale,),);
   }, [collectionUtils, collectionId, locale, slug,],);
   const setId = useCallback2(async (newId) => {
     if (isUndefined(newId,)) return setSlug(void 0,);
-    const cache2 = getCollectionUtilsCache2(collectionUtils, collectionId,);
+    const cache2 = getCollectionUtilsCache(collectionUtils, collectionId,);
     const newSlug = await cache2.getSlugByRecordId(newId, locale,);
     if (!isString(newSlug,)) return;
     await setSlug(newSlug,);
@@ -17872,7 +17978,7 @@ function useMultiCollectionReferenceQueryParam({
   },);
   const ids = useMemo(() => {
     if (slugs.length === 0) return initialArrayValue.current;
-    const cache2 = getCollectionUtilsCache2(collectionUtils, collectionId,);
+    const cache2 = getCollectionUtilsCache(collectionUtils, collectionId,);
     const maybePromises = slugs.filter(isNonEmptyString,).map((slug) => cache2.getRecordIdBySlug(slug, locale,));
     const supportsOptional = isUndefined(initialArrayValue.current,);
     const resolvedIds = useAll(maybePromises,).filter(isString,);
@@ -17886,7 +17992,7 @@ function useMultiCollectionReferenceQueryParam({
     if (newIds.length === 0 && isArray(initialArray,) && !isEqual(newIds, initialArray,)) {
       return setSlugs(['',],);
     }
-    const cache2 = getCollectionUtilsCache2(collectionUtils, collectionId,);
+    const cache2 = getCollectionUtilsCache(collectionUtils, collectionId,);
     const newSlugs = await Promise.all(newIds.map((id3) => cache2.getSlugByRecordId(id3, locale,)),);
     await setSlugs(newSlugs.filter(isString,),);
   }, [collectionUtils, collectionId, locale, setSlugs,],);
@@ -17955,7 +18061,7 @@ function useEnumQueryParam({
   }, [setTitleValue, locale, getOptionTitle,],);
   return [value, setValue,];
 }
-function getCollectionUtilsCache2(collectionUtils, collectionId,) {
+function getCollectionUtilsCache(collectionUtils, collectionId,) {
   const collectionUtilsCache = collectionUtils?.get(collectionId,);
   assert(collectionUtilsCache, () => `CollectionUtilsCache not found for collectionId: ${collectionId}`,);
   return collectionUtilsCache;
@@ -42042,12 +42148,16 @@ function pushLocaleHistoryState({
   url,
   pathVariables,
   localeId,
+  contentLocaleId,
+  canonicalPathVariables,
 },) {
   pushHistoryState({
     routeId,
     pathVariables,
     localeId,
     paginationInfo: readHistoryState()?.paginationInfo,
+    contentLocaleId,
+    canonicalPathVariables,
   }, url,);
 }
 function pushRouteState(routeId, route, options,) {
@@ -42061,6 +42171,8 @@ function pushRouteState(routeId, route, options,) {
     pathVariables,
     localeId,
     currentRoutePath,
+    contentLocaleId,
+    canonicalPathVariables,
   } = options;
   const isSameRouteNavigation = currentRoutePath !== void 0 && currentRoutePath === path;
   const previousState = readHistoryState();
@@ -42069,6 +42181,8 @@ function pushRouteState(routeId, route, options,) {
     routeId,
     hash: hash2,
     pathVariables,
+    contentLocaleId,
+    canonicalPathVariables,
     localeId,
     queryParamBackAnchorSearch,
   }, historyPath,);
@@ -42084,6 +42198,8 @@ function pushSamePageHashState(routeId, route, options, beforePush,) {
     localeId: options.localeId,
     queryParamBackAnchorSearch: currentHistoryState?.queryParamBackAnchorSearch,
     paginationInfo: currentHistoryState?.paginationInfo,
+    contentLocaleId: currentHistoryState?.contentLocaleId,
+    canonicalPathVariables: currentHistoryState?.canonicalPathVariables,
   }, getPathForRoute(route, options,),);
 }
 var lastScrollPositionReplaceStateTime = 0;
@@ -42602,39 +42718,31 @@ function canonicalURLForPath(path, canonicalURL,) {
 async function prepareSyncLocaleMetadataAction({
   siteCanonicalURL,
   activeLocale,
+  contentLocale,
   currentRoute,
   currentRouteId,
   currentPathVariables,
   locales,
   collectionUtils,
 },) {
-  if (!siteCanonicalURL || !activeLocale || !currentRoute?.canonicalLocaleIdByLocaleId) return;
+  if (!siteCanonicalURL || !activeLocale || !contentLocale || !currentRoute) return;
   let generatedCanonicalURL;
   const hreflangLinks = [];
-  const canonicalLocaleId = currentRoute.canonicalLocaleIdByLocaleId[activeLocale.id];
-  let defaultLocale;
-  let canonicalLocale;
-  for (const locale of locales) {
-    defaultLocale ??= locale.id === defaultLocaleId ? locale : void 0;
-    canonicalLocale ??= locale.id === canonicalLocaleId ? locale : void 0;
-    if (canonicalLocale && defaultLocale) break;
-  }
-  if (canonicalLocale) {
-    const {
-      path,
-    } = await getLocalizedNavigationPath({
-      currentLocale: activeLocale,
-      nextLocale: canonicalLocale,
-      defaultLocale,
-      route: currentRoute,
-      routeId: currentRouteId,
-      pathVariables: currentPathVariables,
-      collectionUtils,
-      preserveQueryParams: false,
-    },);
-    if (path) {
-      generatedCanonicalURL = canonicalURLForPath(path, siteCanonicalURL,);
-    }
+  const defaultLocale = locales.find((locale) => locale.id === defaultLocaleId);
+  const {
+    path: localizedNavigationPath,
+  } = await getLocalizedNavigationPath({
+    currentLocale: activeLocale,
+    nextLocale: contentLocale,
+    defaultLocale,
+    route: currentRoute,
+    routeId: currentRouteId,
+    pathVariables: currentPathVariables,
+    collectionUtils,
+    preserveQueryParams: false,
+  },);
+  if (localizedNavigationPath) {
+    generatedCanonicalURL = canonicalURLForPath(localizedNavigationPath, siteCanonicalURL,);
   }
   let xDefaultHref;
   for (const locale of locales) {
@@ -42685,14 +42793,14 @@ function useRouteLocaleContentSync({
   useEffect(() => {
     let isCurrent = true;
     const markAsStale = () => void (isCurrent = false);
-    if (!activeLocale || !contentLocale || activeLocale.id === contentLocale.id) {
+    if (!activeLocale || !contentLocale) {
       void loadSnippets2(currentRouteId, currentPathVariables ?? {}, activeLocale, isInitialNavigation,).catch((error) => {
         if (!isCurrent) return;
         collectErrorToAnalytics(error,);
       },);
       return markAsStale;
     }
-    const promiseOfPathVariables = getLocalizedNavigationPath({
+    const promiseOfPathVariables = activeLocale.id === contentLocale.id ? noopAsync() : getLocalizedNavigationPath({
       currentLocale: activeLocale,
       nextLocale: contentLocale,
       defaultLocale: locales.find(({
@@ -42712,6 +42820,7 @@ function useRouteLocaleContentSync({
       const syncLocaleMetadata = await prepareSyncLocaleMetadataAction({
         siteCanonicalURL,
         activeLocale,
+        contentLocale,
         currentRoute,
         currentRouteId,
         currentPathVariables,
@@ -42789,7 +42898,72 @@ function useNavigationTransition(usesCustomScrollRestoration,) {
     cancelPendingNavigation,
   };
 }
-function Router({
+function Router(props,) {
+  const collectionUtilsCache = useCollectionUtils();
+  const locales = props.locales ?? EMPTY_ARRAY;
+  const initialRouteContentState = useConstant2(() => {
+    const route = props.routes[props.initialRoute];
+    if (!route?.collectionId || props.initialCollectionItemId !== void 0) return;
+    const defaultLocale = locales.find(({
+      id: id3,
+    },) => id3 === defaultLocaleId);
+    const activeLocale = locales.find(({
+      id: id3,
+    },) => id3 === (props.initialLocaleId ?? defaultLocaleId)) ?? null;
+    return new LazyValue(() =>
+      resolveRouteContentState({
+        activeLocale,
+        defaultLocale,
+        collectionUtilsCache,
+        locales,
+        pathVariables: props.initialPathVariables,
+        route,
+        routeId: props.initialRoute,
+      },)
+    );
+  },);
+  const [resolvedInitialRouteContentState, setResolvedInitialRouteContentState,] = useState();
+  if (!initialRouteContentState) {
+    return /* @__PURE__ */ jsx(RouterContent, {
+      suppressHydrationWarning: true,
+      ...props,
+    },);
+  }
+  if (resolvedInitialRouteContentState) {
+    const {
+      contentLocaleId,
+      canonicalPathVariables,
+    } = resolvedInitialRouteContentState;
+    return /* @__PURE__ */ jsx(RouterContent, {
+      suppressHydrationWarning: true,
+      ...props,
+      initialCanonicalPathVariables: canonicalPathVariables,
+      initialContentLocaleIdOverride: contentLocaleId,
+    },);
+  }
+  return /* @__PURE__ */ jsx(Suspense2, {
+    suppressHydrationWarning: true,
+    fallback: null,
+    children: /* @__PURE__ */ jsx(ResolveInitialRouteContentState, {
+      suppressHydrationWarning: true,
+      initialRouteContentState,
+      onResolve: setResolvedInitialRouteContentState,
+    },),
+  },);
+}
+function ResolveInitialRouteContentState({
+  initialRouteContentState,
+  onResolve,
+},) {
+  const resolvedState = initialRouteContentState.use();
+  useLayoutEffect(() => {
+    startTransition2(() => {
+      onResolve(resolvedState,);
+    },);
+  }, [onResolve, resolvedState,],);
+  return null;
+}
+function RouterContent({
   defaultPageStyle,
   disableHistory,
   initialPathVariables,
@@ -42799,7 +42973,9 @@ function Router({
   routes,
   initialLocaleId,
   initialCollectionItemId,
+  initialContentLocaleIdOverride,
   locales = EMPTY_ARRAY,
+  initialCanonicalPathVariables,
   preserveQueryParams = false,
   LayoutTemplate,
   EditorBar,
@@ -42812,6 +42988,8 @@ function Router({
     routeId: initialRoute,
     initialPathVariables,
     initialLocaleId,
+    initialContentLocaleId: initialContentLocaleIdOverride,
+    initialCanonicalPathVariables,
   },);
   const startViewTransition2 = useViewTransition();
   const [dep, forceUpdate,] = useForceUpdate3();
@@ -42824,8 +43002,10 @@ function Router({
   }, [],);
   const isInitialNavigationRef = useRef(true,);
   const routerPathnameWithHashRef = useRef();
+  const localeSwitchRequestIndexRef = useRef(0,);
   const currentRouteRef = useRef(initialRoute,);
   const currentPathVariablesRef = useRef(initialPathVariables,);
+  const pendingNavigationResolutionRef = useRef();
   const currentLocaleIdRef = useRef(initialLocaleId,);
   const scrollRestoration = useScrollRestoration(disableHistory,);
   const {
@@ -42836,14 +43016,21 @@ function Router({
     startNavigation,
     cancelPendingNavigation,
   } = useNavigationTransition(usesCustomScrollRestoration,);
+  const collectionUtilsCache = useCollectionUtils();
   const scheduleNavigationScroll = scrollRestoration.scheduleScroll;
   const currentLocaleId = currentLocaleIdRef.current;
   const currentRouteId = currentRouteRef.current;
+  const currentPathVariables = currentPathVariablesRef.current;
   const currentRoute = routes[currentRouteId];
   const currentRoutePath = currentRoute?.path;
   if (!currentRoute) {
     throw new Error(`Router cannot find route for ${currentRouteId}`,);
   }
+  const defaultLocale = useMemo(() => {
+    return locales.find(({
+      id: id3,
+    },) => id3 === defaultLocaleId);
+  }, [locales,],);
   const activeLocale = useMemo(() => {
     return locales.find(({
       id: id3,
@@ -42852,22 +43039,19 @@ function Router({
       return id3 === currentLocaleId;
     },) ?? null;
   }, [currentLocaleId, locales,],);
-  const pageExistsInCurrentLocale = !activeLocale || !currentRoute.includedLocales ||
-    currentRoute.includedLocales.includes(activeLocale.id,);
-  const contentLocale = useMemo(() => {
-    if (!activeLocale) return null;
-    let contentLocaleId;
-    if (pageExistsInCurrentLocale) {
-      contentLocaleId = currentRoute?.canonicalLocaleIdByLocaleId?.[activeLocale.id];
-    } else {
-      const notFoundRouteEntry = Object.values(routes,).find((route) => route.path && customNotFoundPagePaths.has(route.path,));
-      contentLocaleId = notFoundRouteEntry?.canonicalLocaleIdByLocaleId?.[activeLocale.id];
-    }
-    if (!contentLocaleId) return activeLocale;
-    return locales.find(({
-      id: id3,
-    },) => id3 === contentLocaleId) ?? activeLocale;
-  }, [activeLocale, currentRoute, locales, pageExistsInCurrentLocale, routes,],);
+  const {
+    contentLocale,
+    currentCanonicalPathVariables,
+    pageExistsInCurrentLocale,
+    setRouteContentState,
+  } = useRouteContentState({
+    activeLocale,
+    currentRoute,
+    initialCanonicalPathVariables,
+    initialContentLocaleIdOverride,
+    locales,
+    routes,
+  },);
   const textDirection = activeLocale?.textDirection ?? 'ltr';
   const layoutDirection = adaptLayoutToTextDirection ? textDirection : 'ltr';
   useLayoutEffect(() => {
@@ -42881,6 +43065,7 @@ function Router({
       contentLocale,
       locales,
       setLocale: async (localeOrLocaleId) => {
+        const requestIndex = ++localeSwitchRequestIndexRef.current;
         const nextRender = monitorNextPaintAfterRender({
           localized: true,
         },);
@@ -42888,22 +43073,30 @@ function Router({
           priority: 'user-blocking',
           continueAfter: 'paint',
         },);
+        if (requestIndex !== localeSwitchRequestIndexRef.current) {
+          nextRender.ignore?.();
+          return;
+        }
         let localeId;
         if (isString(localeOrLocaleId,)) {
           localeId = localeOrLocaleId;
         } else if (isObject2(localeOrLocaleId,)) {
           localeId = localeOrLocaleId.id;
         }
-        const defaultLocale = locales.find(({
-          id: id3,
-        },) => id3 === defaultLocaleId);
         const nextLocale = locales.find(({
           id: id3,
         },) => id3 === localeId);
-        if (!nextLocale) return;
+        if (!nextLocale) {
+          nextRender.ignore?.();
+          return;
+        }
         const currentRouteId2 = currentRouteRef.current;
         const currentRoute2 = routes[currentRouteId2];
-        if (!currentRoute2) return;
+        if (!currentRoute2) {
+          nextRender.ignore?.();
+          return;
+        }
+        const sitePrefix = getSitePrefix(siteCanonicalURL,);
         try {
           const localeResult = await switchLocale2({
             currentLocale: activeLocale,
@@ -42913,13 +43106,34 @@ function Router({
             defaultLocale,
             pathVariables: currentPathVariablesRef.current,
             preserveQueryParams,
+            sitePrefix,
           },);
-          if (!localeResult) return;
-          const currentPath = localeResult.path;
+          if (!localeResult || requestIndex !== localeSwitchRequestIndexRef.current) {
+            nextRender.ignore?.();
+            return;
+          }
+          const currentPath = localeResult.path && sitePrefix + localeResult.path;
+          const {
+            contentLocaleId,
+            canonicalPathVariables,
+          } = await resolveRouteContentState({
+            activeLocale: nextLocale,
+            defaultLocale,
+            collectionUtilsCache,
+            locales,
+            pathVariables: localeResult.pathVariables,
+            route: currentRoute2,
+            routeId: currentRouteId2,
+          },);
+          if (requestIndex !== localeSwitchRequestIndexRef.current) {
+            nextRender.ignore?.();
+            return;
+          }
           isInitialNavigationRef.current = false;
-          currentPathVariablesRef.current = localeResult.pathVariables;
           currentLocaleIdRef.current = nextLocale.id;
           routerPathnameWithHashRef.current = currentPath;
+          currentPathVariablesRef.current = localeResult.pathVariables;
+          setRouteContentState(contentLocaleId, canonicalPathVariables,);
           const nextPathWithFilledVariables = currentRoute2.path && localeResult.pathVariables
             ? fillPathVariables(currentRoute2.path, localeResult.pathVariables,)
             : currentRoute2.path;
@@ -42937,6 +43151,8 @@ function Router({
                 url: currentPath,
                 pathVariables: localeResult.pathVariables,
                 localeId: nextLocale.id,
+                contentLocaleId,
+                canonicalPathVariables,
               },);
             }
             : void 0;
@@ -42949,16 +43165,20 @@ function Router({
             disableHistory ? void 0 : updateURL,
             false,
           );
-        } catch {}
+        } catch {
+          nextRender.ignore?.();
+        }
       },
     };
   }, [
     activeLocale,
+    defaultLocale,
     contentLocale,
     disableHistory,
     forceUpdate,
     locales,
     preserveQueryParams,
+    setRouteContentState,
     routes,
     scheduleNavigationScroll,
     startNavigation,
@@ -42966,17 +43186,33 @@ function Router({
     monitorNextPaintAfterRender,
     transitionFn,
     switchLocale2,
+    collectionUtilsCache,
+    siteCanonicalURL,
   ],);
   const setCurrentRouteId = useCallback2(
-    (routeId, localeId, hash2, pathnameWithHash, pathVariables, isHistoryTransition, nextRender, shouldSmoothScroll, updateURL,) => {
+    (
+      routeId,
+      localeId,
+      hash2,
+      pathnameWithHash,
+      pathVariables,
+      contentLocaleId,
+      canonicalPathVariables,
+      isHistoryTransition,
+      nextRender,
+      shouldSmoothScroll,
+      updateURL,
+    ) => {
       isInitialNavigationRef.current = false;
       const currentRouteId2 = currentRouteRef.current;
       const route = routes[routeId];
       const resolvedHash = getRouteElementId(route, hash2,);
       const pathWithFilledVariables2 = route?.path && pathVariables ? fillPathVariables(route.path, pathVariables,) : route?.path;
       currentRouteRef.current = routeId;
-      currentPathVariablesRef.current = pathVariables;
       currentLocaleIdRef.current = localeId;
+      currentPathVariablesRef.current = pathVariables;
+      pendingNavigationResolutionRef.current = void 0;
+      setRouteContentState(contentLocaleId, canonicalPathVariables,);
       routerPathnameWithHashRef.current = pathnameWithHash;
       scheduleNavigationScroll({
         routeId,
@@ -43003,6 +43239,7 @@ function Router({
     },
     [
       forceUpdate,
+      setRouteContentState,
       routes,
       usesCustomScrollRestoration,
       scheduleNavigationScroll,
@@ -43067,11 +43304,11 @@ function Router({
       pathVariables = Object.fromEntries(Object.entries(pathVariables,).filter(([key7,],) => inUse.has(key7,)),);
     }
     const routeElementId = getRouteElementId(newRoute, hash2,);
-    const currentPathVariables2 = currentPathVariablesRef.current;
+    const sourcePathVariables = currentPathVariablesRef.current;
     const currentRouteLocaleId = currentLocaleIdRef.current;
-    const isSamePageNavigation = isSamePage({
+    const isSamePageNavigation = pendingNavigationResolutionRef.current === void 0 && isSamePage({
       routeId: currentRouteRef.current,
-      pathVariables: currentPathVariables2,
+      pathVariables: sourcePathVariables,
     }, {
       routeId,
       pathVariables,
@@ -43101,7 +43338,7 @@ function Router({
         pushSamePageHashState(routeId, route, {
           currentRoutePath: route.path,
           currentRoutePathLocalized: route.pathLocalized,
-          currentPathVariables: currentPathVariables2,
+          currentPathVariables: sourcePathVariables,
           pathVariables,
           hash: hash2,
           localeId: currentRouteLocaleId,
@@ -43119,7 +43356,7 @@ function Router({
     const pathnameWithHash = getSitePrefix(siteCanonicalURL,) + getPathForRoute(newRoute, {
       currentRoutePath: currentRoute2?.path,
       currentRoutePathLocalized: currentRoute2?.pathLocalized,
-      currentPathVariables: currentPathVariables2,
+      currentPathVariables: sourcePathVariables,
       hash: hash2,
       pathVariables,
       localeId: currentRouteLocaleId,
@@ -43131,6 +43368,21 @@ function Router({
       // We need an absolute path for the hash
       siteCanonicalURL,
     },);
+    const navigationResolution = {};
+    pendingNavigationResolutionRef.current = navigationResolution;
+    const {
+      contentLocaleId,
+      canonicalPathVariables,
+    } = await resolveRouteContentState({
+      activeLocale,
+      defaultLocale,
+      collectionUtilsCache,
+      locales,
+      pathVariables,
+      route: newRoute,
+      routeId,
+    },);
+    if (pendingNavigationResolutionRef.current !== navigationResolution) return;
     const updateURL = () => {
       executeBeforeUrlUpdate();
       pushRouteState(routeId, newRoute, {
@@ -43138,6 +43390,8 @@ function Router({
         currentRoutePath: currentRoute2?.path,
         hash: hash2,
         pathVariables,
+        contentLocaleId,
+        canonicalPathVariables,
         localeId: currentRouteLocaleId,
       },);
     };
@@ -43147,6 +43401,8 @@ function Router({
       hash2,
       pathnameWithHash,
       pathVariables,
+      contentLocaleId,
+      canonicalPathVariables,
       false,
       nextRender,
       shouldSmoothScroll,
@@ -43164,10 +43420,12 @@ function Router({
     usesCustomScrollRestoration,
     isNavigationCommitPending,
     scheduleNavigationScroll,
+    collectionUtilsCache,
+    defaultLocale,
+    activeLocale,
   ],);
   const getRoute = useGetRouteCallback(routes,);
   const currentPathnameWithHash = routerPathnameWithHashRef.current;
-  const currentPathVariables = currentPathVariablesRef.current;
   const pageviewEventData = useSendPageView(
     currentRoute,
     currentRouteId,
@@ -43192,6 +43450,7 @@ function Router({
     getRoute,
     currentRouteId,
     currentPathVariables,
+    currentCanonicalPathVariables,
     routes,
     collectionUtils,
     preserveQueryParams,
@@ -43203,6 +43462,7 @@ function Router({
     getRoute,
     currentRouteId,
     currentPathVariables,
+    currentCanonicalPathVariables,
     routes,
     collectionUtils,
     preserveQueryParams,
@@ -43311,6 +43571,44 @@ function WithLayoutTemplate({
     style: style2,
     children,
   },);
+}
+function useRouteContentState({
+  activeLocale,
+  currentRoute,
+  initialCanonicalPathVariables,
+  initialContentLocaleIdOverride,
+  locales,
+  routes,
+},) {
+  const currentCanonicalPathVariablesRef = useRef(initialCanonicalPathVariables,);
+  const overrideContentLocaleIdRef = useRef(initialContentLocaleIdOverride,);
+  const overrideContentLocaleId = overrideContentLocaleIdRef.current;
+  const pageExistsInCurrentLocale = !activeLocale || !currentRoute.includedLocales ||
+    currentRoute.includedLocales.includes(activeLocale.id,);
+  const contentLocale = useMemo(() => {
+    if (!activeLocale) return null;
+    let contentLocaleId;
+    if (pageExistsInCurrentLocale) {
+      contentLocaleId = overrideContentLocaleId ?? currentRoute?.canonicalLocaleIdByLocaleId?.[activeLocale.id];
+    } else {
+      const notFoundRouteEntry = Object.values(routes,).find((route) => route.path && customNotFoundPagePaths.has(route.path,));
+      contentLocaleId = notFoundRouteEntry?.canonicalLocaleIdByLocaleId?.[activeLocale.id];
+    }
+    if (!contentLocaleId) return activeLocale;
+    return locales.find(({
+      id: id3,
+    },) => id3 === contentLocaleId) ?? activeLocale;
+  }, [activeLocale, currentRoute, locales, overrideContentLocaleId, pageExistsInCurrentLocale, routes,],);
+  const setRouteContentState = useCallback2((contentLocaleId, canonicalPathVariables,) => {
+    overrideContentLocaleIdRef.current = contentLocaleId;
+    currentCanonicalPathVariablesRef.current = canonicalPathVariables;
+  }, [],);
+  return {
+    contentLocale,
+    currentCanonicalPathVariables: currentCanonicalPathVariablesRef.current,
+    pageExistsInCurrentLocale,
+    setRouteContentState,
+  };
 }
 function preloadImage(url,) {
   return new Promise((resolve, reject,) => {
@@ -43784,6 +44082,7 @@ function PageRoot(props,) {
     routeId,
     framerSiteId,
     pathVariables,
+    canonicalPathVariables,
     routes,
     collectionUtils,
     notFoundPage,
@@ -43801,6 +44100,7 @@ function PageRoot(props,) {
     adaptLayoutToTextDirection,
     loadSnippetsModule,
     initialCollectionItemId,
+    initialContentLocaleIdOverride,
   } = props;
   React42.useEffect(() => {
     if (isWebsite) return;
@@ -43829,8 +44129,10 @@ function PageRoot(props,) {
                   suppressHydrationWarning: true,
                   initialRoute: routeId,
                   initialPathVariables: pathVariables,
+                  initialCanonicalPathVariables: canonicalPathVariables,
                   initialLocaleId: localeId,
                   initialCollectionItemId,
+                  initialContentLocaleIdOverride,
                   routes,
                   collectionUtils,
                   notFoundPage,
@@ -49102,7 +49404,7 @@ var UnsupportedQueryError = class extends ServerDatabaseError {
   }
 };
 function isServerDatabaseRawValue(value,) {
-  return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+  return value === null || typeof value === 'string' || typeof value === 'number';
 }
 function isServerDatabaseRawRow(value,) {
   return isObject2(value,) && Object.values(value,).every(isServerDatabaseRawValue,);
@@ -49182,6 +49484,7 @@ function mapValueFromRaw(value, type,) {
       return mapNumberValue(value,);
     case 'color':
     case 'enum':
+    case 'file':
     case 'string':
     case 'collectionreference':
       return mapStringValue(value,);
@@ -49189,6 +49492,8 @@ function mapValueFromRaw(value, type,) {
       return mapStringArrayJsonValue(value,);
     case 'responsiveimage':
       return mapImageJsonValue(value,);
+    case 'link':
+      return mapLinkJsonValue(value,);
     default:
       assertNever(type, 'Unknown server query result type',);
   }
@@ -49250,6 +49555,16 @@ function mapImageJsonValue(value,) {
 }
 function isImageValue(value,) {
   return isObject2(value,) && typeof value.src === 'string';
+}
+function mapLinkJsonValue(value,) {
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value,);
+      if (typeof parsed === 'string' || isLinkToWebPage(parsed,)) return parsed;
+    } catch {}
+  }
+  logger.warn(new ServerDatabaseError(`Unexpected link value ${value}, returning null.`,),);
+  return null;
 }
 function mapRowsFromRaw(rows, columns,) {
   return rows.map((row) => {
@@ -63118,7 +63433,7 @@ var package_default = {
     'jest-diff': '^29.3.1',
     'jest-environment-jsdom': '^29.3.1',
     'jest-environment-jsdom-global': '^4.0.0',
-    oxlint: '^1.78.0',
+    oxlint: '^1.81.0',
     react: '^18.2.0',
     'react-dom': '^18.2.0',
     semver: '^7.7.1',
